@@ -1,2 +1,2 @@
-# cov-matrix-estimation
+# Covariance matrix estimation and portfolio optimization
 Master thesis
