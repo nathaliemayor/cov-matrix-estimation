@@ -1,1 +1,1 @@
-# cov-matrix-estimation
+# Covariance matrix estimation for portfolio selection
