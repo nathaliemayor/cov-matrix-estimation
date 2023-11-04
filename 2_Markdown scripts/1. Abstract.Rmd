@@ -1,5 +1,0 @@
----
-title: "1. Abstract"
-author: "Nathalie Mayor"
-output: pdf_document
----
