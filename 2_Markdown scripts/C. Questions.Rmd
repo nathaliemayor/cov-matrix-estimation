@@ -1,0 +1,15 @@
+---
+title: "C. Questions"
+author: "Nathalie Mayor"
+output: 
+  pdf_document:
+header-includes:
+    - \usepackage{setspace}\doublespacing
+    - \usepackage{float}
+bibliography: thesis.bib
+link-citations: yes
+linkcolor: blue
+---
+
+1. Do I need to prove the lower bound for the average correlation?
+2. Do I need to derive the lagrangian for solving the optimal weights or can I directly give the final formula?

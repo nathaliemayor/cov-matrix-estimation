@@ -1,0 +1,805 @@
+# MAIN
+
+# ------------------------------------------------------------------------------
+#                 LOAD PACKAGES AND USER DEFINED FUNCTIONS
+# ------------------------------------------------------------------------------
+# install and load local libraries 
+# TODO: ADD THIS TO A PREAMBLE FILE WITH LIST OF PACKAGES, CHECK INSTALL + CALL
+local_libs <- list.files("lib", full.names = T)
+lapply(local_libs[1], install.packages, repos=NULL, type="source")
+# general
+library(tidyverse)
+library(xts)
+library(zoo)
+library(lubridate)
+# plotting
+library(ggalt)
+library(extrafont)
+library(plotly)
+# covariance specific 
+library(cccp)
+library(huge)           # glasso, RIC
+library(cvCovEst)
+library(rrcov)          # CovMcd and CovMve
+library(tawny)
+library(tawny.types)
+library(covmat)
+library(corpcor)
+library(CovTools)
+library(covFactorModel) # factor models
+# finance specific
+library(tidyquant)
+library(quantmod)
+# math/ stats tools
+library(quadprog)
+library(MASS)
+library(StatPerMeCo)
+# remotes::install_github("MatthewBJane/theme_park")
+library(ThemePark)
+library(ggrepel)
+
+# load own functions
+# load Ledoit-Wolf functions
+
+lapply(
+  c(
+    list.files("functions", full.names = TRUE),
+    list.files("covShrinkage-main", pattern = ".R", full.names = T)
+  ),
+  source
+) %>% invisible
+
+# define paths 
+data_path <- "/Users/pro/Desktop/masters_thesis/data"
+from_date <- as.Date("1982-01-01")
+to_date <- as.Date("2022-02-01")
+
+# ------------------------------------------------------------------------------
+#                 LOAD DATA
+# ------------------------------------------------------------------------------
+# get data (02-1982 to 02-2022, 40 years, 567 stocks, cleaned)
+get(load(file.path(data_path,"stock_log_returns_monthly_567.rda"))) %>% 
+  invisible
+# daily data from 1997 to 2022
+get(load(file.path(data_path,"old data/stock_log_returns_daily_1000.rda"))) %>% 
+  invisible
+# monthly data
+log_returns <- stock_log_returns_monthly_567[,1:151] %>% 
+  filter(date > from_date & date < to_date)
+# daily data
+daily_log_returns <- stock_log_returns_daily_1000 %>% 
+  dplyr::select(date, everything())
+
+# get 10-year Treasury notes and S&P500 data monthly and daily
+tickers <- c("^TNX","^GSPC")
+getSymbols(
+  tickers, 
+  from = from_date, 
+  to = to_date, 
+  periodicity = "daily"
+)
+gspc_monthly <- GSPC$GSPC.Adjusted %>% 
+  apply.monthly(mean) %>% 
+  fortify.zoo %>% 
+  mutate(returns = GSPC.Adjusted/lag(GSPC.Adjusted)-1) 
+
+# Load historical factor data (market, SMB, HML)
+# downloaded directly from 
+# https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html
+# Fama/French 3 Factors, CSV
+factors <- rio::import(
+  file.path(data_path, "F-F_Research_Data_Factors.CSV")
+) %>% 
+  mutate(V1 = as.Date(
+    V1 %>% paste0("01"), 
+    format = "%Y%m%d"
+  )
+  ) %>% 
+  dplyr::filter(V1 > from_date & V1 < to_date) %>% 
+  dplyr::select(-RF) %>% 
+  rename(date = V1)
+
+# ------------------------------------------------------------------------------
+#                 DEFINE PARAMETERS, SETTINGS
+# ------------------------------------------------------------------------------
+training_period <- 15*12    # months
+rolling_period <- 6         # months
+n <- dim(log_returns)[2]
+k <- dim(log_returns)[1]
+
+# rules: 
+# gis, lis, qis: n_obs > n_var
+# CovMve: n_obs > 2*n_var
+
+cov_est_method = c(
+  "cov1Para", 
+  "cov2Para", 
+  "covCor", 
+  "covDiag", 
+  "covMarket",
+  "gis", 
+  "qis", 
+  "lis",
+  # "CovMve", 
+  "CovMcd",
+  "huge_glasso",
+  # "equal_weights",
+  # "oracle", 
+  # "pca",
+  "factor1",
+  "factor3",
+  "sample"
+)
+
+roll <- seq(1, k - training_period, rolling_period)
+
+# ------------------------------------------------------------------------------
+#                 SIMULATIONS
+# ------------------------------------------------------------------------------
+#########
+# PRIAL #
+#########
+
+# N_seq <- c(3,4,5,8,10,16,20,25,32,40,50,80,100,160,200, 300, 500)
+# p_seq <- N_seq %>% rev
+
+N_seq <- seq(2,200, 10)
+p_seq <- rev(N_seq)
+
+Np <- data.frame(n_obs=N_seq, p_variables=p_seq) 
+n_simulations <- 2
+
+method <- cov_est_method
+# method <- "huge_glasso"
+
+tictoc::tic()
+mc_sim <- lapply(1:n_simulations, function(sim){
+  pmap(
+    crossing(Np, method) %>% 
+      filter(
+        case_when(
+          method %in% c("gis", "lis", "qis", "CovMcd") ~ n_obs > p_variables,
+          method == "CovMve" ~ n_obs > 2*p_variables,
+          method %in% c("factor1", "pca") ~ n_obs > 2 & p_variables > 5,
+          method == "factor3" ~ n_obs > 3,
+          TRUE ~ n_obs > 1)
+      ),
+    mc_simulation_cov,
+    simulation = sim,
+    criterion = "prial"
+  ) %>% reduce(append)
+})
+tictoc::toc()
+
+mean_test_primal <- lapply(1:length(mc_sim[[1]]), function(x){
+  mc_sim %>% map_depth(1,x) %>% reduce(append) %>% mean
+}) %>% reduce(append)
+
+# winner: gis N > K, in general cov1para
+prial_plot <- crossing(Np, method) %>% 
+  filter(
+    case_when(
+      method %in% c("gis", "lis", "qis", "CovMcd") ~ n_obs > p_variables,
+      method == "CovMve" ~ n_obs > 2*p_variables,
+      method %in% c("factor1", "pca") ~ n_obs > 2 & p_variables > 5,
+      method == "factor3" ~ n_obs > 3,
+      TRUE ~ n_obs > 1)) %>% 
+  mutate(primal = mean_test_primal,
+         pn = p_variables/n_obs) %>% 
+  ggplot(aes(x = pn, y = primal, color = method)) +
+  # geom_smooth(se = F) +
+  geom_line() +
+  geom_vline(xintercept = 1, color = "red") +
+  geom_hline(yintercept = 0, color ="red") +
+  theme_hsg() +
+  xlab("Nb. variables/ Nb. observations") + 
+  ylab("Percentage Relative Improvement in Average Loss (%)") + 
+  ggtitle("PRIMAL for estimators wrt. sample covariance") +
+  ylim(c(-1,1)) +
+  xlim(c(0,17))
+
+plotly::ggplotly(prial_plot)
+
+###########
+# L2 Norm #
+###########
+
+n_obs <- seq(0,200, 40)
+p_variables <- n_obs
+method <- cov_est_method
+
+l2_norm_cov <- lapply(1:10, function(sim){
+  pmap(
+    crossing(Np, method) %>% 
+      filter(
+        case_when(
+          method %in% c("gis", "lis", "qis", "CovMcd") ~ n_obs > p_variables,
+          method == "CovMve" ~ n_obs > 2*p_variables,
+          method %in% c("factor1", "pca") ~ n_obs > 2 & p_variables > 5,
+          method == "factor3" ~ n_obs > 3,
+          TRUE ~ n_obs > 1)),
+    mc_simulation_cov,
+    criterion = "l2_norm",
+    simulation = sim
+  ) %>% reduce(append)
+})
+
+mean_l2 <- lapply(1:length(l2_norm_cov[[1]]), function(x){
+  l2_norm_cov  %>% map_depth(1,x) %>% reduce(append) %>% mean
+}) %>% reduce(append)
+
+results_l2 <- crossing(Np, method) %>% 
+  filter(
+    case_when(
+      method %in% c("gis", "lis", "qis", "CovMcd") ~ n_obs > p_variables,
+      method == "CovMve" ~ n_obs > 2*p_variables,
+      method %in% c("factor1", "pca") ~ n_obs > 2 & p_variables > 5,
+      method == "factor3" ~ n_obs > 3,
+      TRUE ~ n_obs > 1)) %>% 
+  mutate(l2 = mean_l2)
+
+colnames(results_l2) <- c("x","y","method", "z")
+
+results_method <- lapply(method, function(met){
+  results_l2 %>% filter(method == met) %>% mutate(z=z/y)
+})
+names(results_method) <- method
+
+lapply(method, function(met){
+  plot_ly(
+    x = results_method[[met]]$x %>% unique,
+    y = results_method[[met]]$y %>% unique,
+    z = matrix(results_method[[met]]$z, ncol = 5),
+    type = "contour"
+  ) %>% 
+    layout(title = met, 
+           xaxis = list(title = "Nb. Observations"), 
+           yaxis = list(title = "Nb. Variables")
+    )
+})
+
+# ------------------------------------------------------------------------------
+#                 HISTORICAL DATA - COMPUTE PORTFOLIOS
+# ------------------------------------------------------------------------------
+
+test_rolling_cov_method <- pmap(
+  crossing(cov_est_method, roll),
+  get_portfolio_metrics, 
+  stock_returns = log_returns,
+  portfolio_optimization = "minvar",
+  short = TRUE, 
+  factor_returns = factors
+)
+
+names(test_rolling_cov_method) <- rep(cov_est_method, each=50)
+
+results_by_cov <- lapply(seq(1,601, 50), function(x) 
+  test_rolling_cov_method[x:(x+49)])
+
+names(results_by_cov) <- cov_est_method
+
+
+all_avg_returns <- lapply(cov_est_method, function(cov) 
+  results_by_cov[[cov]] %>% map_depth(1,1) %>% reduce(rbind) %>% 
+    summarise(mean = mean(returns)*12*100)) %>% 
+  unlist %>% 
+  reduce(append)
+
+all_avg_sd <- lapply(cov_est_method, function(cov) 
+  results_by_cov[[cov]] %>% 
+    map_depth(1,2) %>% 
+    reduce(append) %>%
+    mean*sqrt(12)*100) %>% 
+  reduce(append)
+
+ggplot(
+  data_frame(
+    method = cov_est_method, 
+    returns = all_avg_returns, 
+    sd = all_avg_sd
+  ),
+  aes(x = sd, y = returns)) +
+  geom_point() +
+  geom_label_repel(
+    aes(label = method),
+    box.padding = 1,
+    point.padding = 1,
+    segment.color = "grey",
+    color = "darkgreen"
+  ) +
+  theme_hsg() +
+  # xlim(c(11,24)) +
+  ggtitle("MinVar portfolios with various covariance matrix estimation methods")
+
+# ------------------------------------------------------------------------------
+#      HISTORICAL DATA - COMPUTE PORTFOLIOS - HIGH VOLATILITY, DAILY
+# ------------------------------------------------------------------------------
+
+test_rolling_cov_method <- pmap(
+  crossing(cov_est_method, roll),
+  get_portfolio_metrics, 
+  stock_returns = log_returns,
+  portfolio_optimization = "minvar",
+  short = TRUE
+)
+
+results_by_cov <- lapply(seq(1,501, 50), function(x) 
+  test_rolling_cov_method[x:(x+49)])
+
+names(results_by_cov) <- cov_est_method
+
+all_avg_returns <- lapply(cov_est_method, function(cov) 
+  results_by_cov[[cov]] %>% map_depth(1,1) %>% reduce(rbind) %>% 
+    summarise(mean = mean(returns)*12*100)) %>% 
+  unlist %>% 
+  reduce(append)
+
+all_avg_sd <- lapply(cov_est_method, function(cov) 
+  results_by_cov[[cov]] %>% 
+    map_depth(1,2) %>% 
+    reduce(append) %>%
+    mean*sqrt(12)*100) %>% 
+  reduce(append)
+
+ggplot(data_frame(
+  method = cov_est_method, 
+  returns = all_avg_returns, 
+  sd = all_avg_sd
+),
+aes(x = sd, y = returns)) +
+  geom_point() +
+  geom_label_repel(
+    aes(label = method),
+    box.padding = 1,
+    point.padding = 1,
+    segment.color = "#f5d1e6ff",
+    color = "#bf2986ff"
+  ) +
+  theme_hsg() +
+  # xlim(c(11,24)) +
+  ggtitle("minvar portfolios with various covariance matrix estimation methods")
+
+# factor test
+
+library(quantmod)
+library(covFactorModel)
+# devtools::install_github("dppalomar/covFactorModel")
+
+# Load historical factor data (market, SMB, HML)
+factors <- rio::import(
+  file.path(data_path, "F-F_Research_Data_Factors.CSV")
+) %>% 
+  mutate(V1 = as.Date(
+    V1 %>% paste0("01"), 
+    format = "%Y%m%d"
+  )
+  ) %>% 
+  dplyr::filter(V1 >= "1982-02-01" & V1 < "2022-02-01") %>% 
+  dplyr::select(-RF)
+
+# Combine stock returns and factors
+data <- cbind(
+  log_returns %>% 
+    dplyr::select(-market), 
+  factors %>% 
+    dplyr::select(-V1)
+)
+
+log_returns_xts <- xts(
+  log_returns %>% 
+    dplyr::select(-date), 
+  order.by = log_returns$date
+)
+factors_xts <- xts(factors[,-1], order.by = factors$V1)
+
+# 1-factor model
+F_ <- cbind(ones = 1, factors$`Mkt-RF`)
+Gamma <- t(solve(t(F_) %*% F_, t(F_) %*% as.matrix(log_returns[,-1])))
+colnames(Gamma) <- c("alpha", "beta")
+alpha <- Gamma[, 1]
+beta <- Gamma[, 2]
+E <- t(t(log_returns[,-1]) - 
+         Gamma %*% 
+         t(F_))
+Psi <- (1/(nrow(log_returns)-2)) * t(E) %*% E
+Sigma_SP500 <- as.numeric(var(factors$`Mkt-RF`)) * 
+  beta %o% 
+  beta +
+  diag(diag(Psi))
+
+# Fama-French 3-factors model
+F_ <- cbind(ones = 1, factors_xts)
+Gamma <- t(solve(t(F_) %*% F_, t(F_) %*% log_returns_xts))
+colnames(Gamma) <- c("alpha", "beta1", "beta2", "beta3")
+alpha <- Gamma[, 1]
+B <- Gamma[, 2:4]
+E <- xts(t(t(log_returns_xts) - Gamma %*% t(F_)), index(log_returns_xts))
+Psi <- (1/(nrow(log_returns_xts)-2)) * t(E) %*% E
+Sigma_FamaFrench <- B %*% 
+  cov(factors_xts) %*% 
+  t(B) +
+  diag(diag(Psi))
+# ------------------------------------------------------------------------------
+# SIMULATIONS
+# ------------------------------------------------------------------------------
+# Load necessary libraries
+library(xts)
+library(MASS)  # For generating multivariate normal data
+
+# Set random seed for reproducibility
+set.seed(123)
+
+# Define the number of assets (N) and factors (K)
+N <- 10  # Number of assets
+K <- 100  # Number of observations
+
+# Simulate factor data (3 factors)
+n_factors <- 3
+factors_xts <- xts(
+  matrix(
+    rnorm(
+      n_factors * K
+    ), 
+    ncol = n_factors
+  ), 
+  order.by = seq.Date(
+    from = as.Date("2020-01-01"), 
+    length.out = K, 
+    by = "days"
+  )
+)
+
+# Simulate asset returns (log_returns_xts)
+true_alpha <- rnorm(N)  # True alpha values for each asset
+true_beta <- rnorm(N)   # True beta values for each asset
+
+# Generate factor returns based on the provided factors
+factor_returns <- as.matrix(factors_xts)
+
+# Simulate asset returns using the 1-factor model
+simulate_asset_returns <- function(i) {
+  asset_returns <- true_alpha[i] + true_beta[i] * factor_returns[, 2] + rnorm(K)
+  return(asset_returns)
+}
+
+# Use lapply to simulate returns for all assets
+asset_returns_list <- lapply(1:N, simulate_asset_returns)
+log_returns_xts <- do.call(cbind, asset_returns_list)
+
+# Estimate Sigma_SP500 based on the simulated data
+F_ <- cbind(ones = 1, factors_xts[,-1])
+Gamma <- t(solve(t(F_) %*% F_, t(F_) %*% log_returns_xts))
+alpha <- Gamma[, 1]
+B <- Gamma[, 2:3]
+E <- xts(t(t(log_returns_xts) - 
+             Gamma %*% 
+             t(F_)
+), 
+rownames(log_returns_xts) %>% as.Date
+)
+Psi <- (1/(nrow(log_returns_xts)-2)) * t(E) %*% E
+Sigma_SP500 <- B %*% 
+  cov(factors_xts) %*% 
+  t(B) +
+  diag(diag(Psi))
+
+# Print Sigma_SP500
+print("Estimated Sigma_SP500:")
+print(Sigma_SP500)
+
+# get covariance estimates
+
+#' computes estimates of the covariance matrix given the name of the method
+#' and data
+#' 
+#' @param data asset returns or simulated data for which we need cov estimate
+#              NxK dimension
+#' @param method estimation method name
+#' @param factor_data FF factors, only for factor models
+#' @returns NxN covariance matrix estimate, matrix form
+#' 
+
+get_covariance_estimate <- function(
+    data, 
+    method,
+    factor_data = NULL
+) {
+  if (method == "cov1Para") {
+    sigma_hat = cov1Para(Y = data)
+  } else if (method == "cov2Para") {
+    sigma_hat = cov2Para(Y = data)
+  } else if (method == "covCor") {
+    sigma_hat = covCor(Y = data)
+  } else if (method == "covDiag") {
+    sigma_hat = covDiag(Y = data)
+  } else if (method == "covMarket") {
+    sigma_hat = covMarket(Y = data)
+    ## nonlinear shrinkage
+  } else if (method == "gis") {
+    sigma_hat = gis(Y = data)
+  } else if (method == "lis") {
+    sigma_hat = lis(Y = data)
+  } else if (method == "qis") {
+    sigma_hat = qis(Y = data)
+  } else if (method == "oracle") {
+    # Calculate the Oracle covariance estimator
+    sigma_hat <- CovTools::CovEst.2010OAS(data)$S
+  } else if (method == "CovMcd") {
+    sigma_hat = rrcov::CovMcd(data)$cov
+  } else if (method == "CovMve") {
+    sigma_hat = rrcov::CovMve(data)$cov
+  } else if (method == "huge_glasso") {
+    #model selection using ric
+    data_npn <- huge.npn(data, npn.func = "truncation")
+    out_npn <- huge(
+      data_npn, 
+      method = "glasso", 
+      nlambda = 40, 
+      lambda.min.ratio = 0.4, 
+      cov.output = TRUE
+    )
+    select_out <- huge.select(
+      out_npn, 
+      criterion = "ric"
+    )
+    sigma_hat <- select_out$opt.cov
+  } else if (method == "pca") {
+    # Perform PCA using princomp
+    pca_results <- prcomp(
+      cov(
+        data
+      )
+    )
+    
+    principal_components <- pca_results$rotation
+    eigenvalues <- pca_results$sdev^2
+    
+    # Now 'estimated_cov_matrix' contains the estimated covariance matrix
+    cumulative_variance <- cumsum(eigenvalues) / sum(eigenvalues)
+    # choose above 0.95
+    opt_num_comp <- data.frame(
+      num_comp = 1:length(cumulative_variance),
+      cumulative_variance
+    ) %>% 
+      filter(cumulative_variance > 0.95) %>% 
+      .[1,1]
+    
+    # Select the first 'num_components' principal components
+    selected_components <- principal_components[, 1:opt_num_comp]
+    
+    # Select the first 'num_components' eigenvalues
+    selected_eigenvalues <- eigenvalues[1:opt_num_comp]
+    
+    # Estimate the covariance matrix using selected components and eigenvalues
+    sigma_hat <- selected_components %*% 
+      diag(selected_eigenvalues) %*% 
+      t(selected_components)
+    
+  } else if (method %in% c("factor1", "factor3")) {
+    factor_data <- factor_data 
+    if(method == "factor1"){
+      # 1-factor model (market)
+      F_ <- cbind(ones = 1, factor_data[,1])
+    } else if(method == "factor3"){
+      # 3-factors model (market, HML, SMB)
+      F_ <- cbind(ones = 1, factor_data) %>% as.matrix
+    }
+    Gamma <- t(solve(t(F_) %*% F_, t(F_) %*% as.matrix(data)))
+    alpha <- Gamma[,1]
+    beta <- Gamma[,-1]
+    E <- t(t(data) - 
+             Gamma %*% 
+             t(F_))
+    Psi <- (1/(nrow(data)-2)) * t(E) %*% E
+    if(method == "factor1"){
+      # 1-factor model (market)
+      sigma_hat <- as.numeric(var(F_[,-1])) * 
+        beta %o% 
+        beta +
+        diag(diag(Psi))
+    } else if(method == "factor3"){
+      # 3-factors model (market, HML, SMB)
+      sigma_hat <- beta %*% 
+        cov(F_[,-1]) %*% 
+        t(beta) +
+        diag(diag(Psi))
+    }
+  }else if (method == "sample") {
+    sigma_hat = cov(data)
+  }
+  return(sigma_hat) 
+}
+
+# get portfolio metrics
+
+#' computes metrics for portfolio computed based on various covariance matrix
+#' methods
+#' 
+#' @param stock_returns data frame, stocks returns.
+#' @param roll integer, used for the rolling window back-test
+#' @param cov_est_method string, defines method to use to estimate cov matrix 
+#' @param portfolio_optimization portfolio optimization method, tangent/ minvar
+#' @param short TRUE short position allowed, FALSE not allowed
+#' @param factor_returns DF with 3 Fama-French factor returns for factor models
+#' @returns list with portfolio returns, risk, sharp ratio
+#' 
+
+get_portfolio_metrics <- function (
+    stock_returns,  
+    cov_est_method,
+    roll,
+    portfolio_optimization,
+    short = TRUE, 
+    frequency = "monthly", 
+    factor_returns = NULL
+) {
+  if(frequency == "monthly"){
+    freq <- 12
+  }else if(frequency == "daily"){
+    freq <- 252
+  }
+  training_data <- stock_returns[
+    roll:(training_period+roll-1),
+    -1
+  ]
+  training_date <- stock_returns[
+    roll:(training_period+roll-1),
+    1
+  ]
+  if(cov_est_method %in% c("factor1", "factor3")){
+    training_factor_data <- factor_returns[
+      roll:(training_period+roll-1),
+      -1
+    ]
+  } else {
+    training_factor_data <- NULL
+  }
+  
+  testing_data <- stock_returns[
+    (training_period+roll):(training_period+roll+rolling_period-1),
+  ]
+  date_test <- testing_data[,1]
+  # covariance estimation
+  ## linear shrinkage 
+  if (!cov_est_method == "equal_weights") {
+    sigma_hat = get_covariance_estimate(
+      method = cov_est_method,
+      data = training_data,
+      factor_data = training_factor_data
+    )
+  } 
+  # compute optimal portfolio weights
+  if (cov_est_method == "equal_weights") {
+    optimal_weights <- equal_weights(training_data)
+  } else {
+    inverse_sigma_hat = solve(sigma_hat)
+    if (portfolio_optimization == "tangent") {
+      # tangent portfolio from Markowitz formula
+      rf <- window(TNX, 
+                   start = first(training_date), 
+                   end = last(training_date))$TNX.Adjusted %>% 
+        # get average monthly rate, percentage to decimal
+        mean(na.rm = T)/freq/100
+      
+      excess_er_hat <- colMeans(training_data - rf) 
+      optimal_weights <- (inverse_sigma_hat %*% excess_er_hat)/ 
+        sum(inverse_sigma_hat %*% excess_er_hat)
+      
+      if (short == FALSE) {
+        optimal_weights <- quadprog::solve.QP(
+          inverse_sigma_hat,
+          excess_er_hat,
+          cbind(rep(1, length(excess_er_hat)), 
+                diag(1, nrow = length(excess_er_hat))),
+          c(1, rep(0, length(excess_er_hat))),
+        )$solution
+      }
+    } else if (portfolio_optimization == "minvar") {
+      # minvar portfolio from Markowitz formula
+      v_ones <- rep(1, dim(inverse_sigma_hat)[1])
+      
+      optimal_weights <- as.numeric(inverse_sigma_hat %*% v_ones)/
+        as.numeric(v_ones %*% inverse_sigma_hat %*% v_ones)
+    }
+  }
+  period_returns <- rowSums(testing_data[,-1]*optimal_weights) %>% 
+    data_frame(date=date_test, returns = .)
+  ptf_variance <- t(as.matrix(optimal_weights)) %*% 
+    as.matrix(cov(testing_data[,-1])) %*% 
+    as.matrix(optimal_weights)
+  ptf_sd <- sqrt(ptf_variance)
+  ptf_sd_simple <- sd(period_returns$returns)
+  SR <- (mean(period_returns$returns)/ptf_sd)*sqrt(freq)
+  results = list(period_returns, ptf_sd, SR)
+}
+
+# simulation cov
+#' Simulates random variables coming from covariance matrix 
+#' 
+#' @param n_obs number of observations (months)
+#' @param p_variables number of variables (stocks)
+#' @param method estimation method for the covariance matrix
+#' @param criterion error measure, l2 norm or PRIAL
+#' @returns PRIAL ratio
+#' 
+
+mc_simulation_cov <- function (
+    n_obs,
+    p_variables, 
+    method,
+    criterion,
+    simulation
+) {
+  # Simulate data
+  if(method %in% c("factor1", "factor3")) {
+    # simulate factor data for and 1 and 3 factors models
+    if(method == "factor1"){n_factors <- 1} else {n_factors <- 3}
+    # Simulate a random true covariance matrix
+    true_covariance <- matrix(runif(p_variables^2), nrow = p_variables)
+    # to ensure it's positive semi-definite
+    true_covariance <- true_covariance %*% t(true_covariance)  
+    # Generate factor returns
+    factor_returns <- matrix(rnorm(n_factors * n_obs), nrow = n_obs)
+    # Generate asset-specific returns based on the factor model
+    asset_data <- t(sapply(1:p_variables, function(i) {
+      alpha_i <- rnorm(1)  # Generate alpha for each asset
+      beta_i <- rnorm(n_factors)  # Generate beta for each asset
+      
+      asset_returns_i <- alpha_i + 
+        factor_returns %*% 
+        beta_i + 
+        sqrt(true_covariance[i, i]) * 
+        rnorm(n_obs)
+      return(asset_returns_i)
+    }))
+    
+    # Create a data frame with factor returns
+    simulated_factors <- data.frame(factor_returns)
+    
+    # Simulate returns
+    simulated_data <- data.frame(t(asset_data))
+    
+  } else {
+    # True mean vector
+    true_mean <- rep(0, p_variables)
+    
+    # Generate random eigenvalues
+    random_eigenvalues <- runif(p_variables, 0.1, 1.5)
+    
+    # Generate random eigenvectors
+    random_eigenvectors <- matrix(rnorm(p_variables^2), nrow = p_variables)
+    
+    # Create the positive definite covariance matrix
+    true_covariance <- random_eigenvectors %*% 
+      diag(random_eigenvalues) %*% 
+      t(random_eigenvectors)
+    
+    simulated_data <- mvrnorm(n_obs, mu = true_mean, Sigma = true_covariance)
+  }
+  
+  # Calculate the sample covariance matrix (Empirical estimator)
+  sample_covariance <- cov(simulated_data)
+  
+  # Calculate the covariance estimate with chosen method
+  estimate_covariance <- get_covariance_estimate(
+    data = simulated_data, 
+    method = method,
+    factor_data = simulated_factors
+  )
+  
+  if(criterion == "prial") {
+    # Calculate PRIAL and relative efficiency for Ledoit-Wolf estimator
+    error_measure <- get_prial(
+      estimate_covariance, 
+      sample_covariance, 
+      true_covariance
+    )
+  } else if (criterion == "l2_norm") {
+    error_measure <- get_l2_norm(
+      estimate_covariance, 
+      true_covariance
+    )
+  }
+  return(error_measure)
+}
+

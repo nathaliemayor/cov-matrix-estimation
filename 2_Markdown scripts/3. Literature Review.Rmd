@@ -1,0 +1,13 @@
+---
+title: "3. Literature Review"
+author: "Nathalie Mayor"
+output: 
+  pdf_document:
+header-includes:
+    - \usepackage{setspace}\doublespacing
+    - \usepackage{float}
+bibliography: thesis.bib
+link-citations: yes
+linkcolor: blue
+---
+

@@ -1,0 +1,25 @@
+---
+title: "2. Introduction"
+author: "Nathalie Mayor"
+output: 
+  pdf_document:
+header-includes:
+    - \usepackage{setspace}\doublespacing
+    - \usepackage{float}
+bibliography: thesis.bib
+link-citations: yes
+linkcolor: blue
+---
+
+# List of Estimators 
+
+1. (Ridge Arch 1)
+2. (Ridge Arch 2)
+3. Ridge Alternative @van2016ridge, rags2ridges package
+4. graphical lasso
+5. Stein
+
+# List of Benchmarks
+
+1. 1/N equally weighted portfolio
+2. 

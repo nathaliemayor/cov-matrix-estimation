@@ -1,0 +1,26 @@
+---
+title: "Untitled"
+author: "Nathalie Mayor"
+date: "4/15/2022"
+output: pdf_document
+---
+
+
+$$
+\begin{table}[!htbp] \centering 
+  \caption{} 
+  \label{} 
+\begin{tabular}{@{\extracolsep{5pt}} c} 
+\\[-1.8ex]\hline 
+\hline \\[-1.8ex] 
+. \\ 
+\hline \\[-1.8ex] 
+J & J SNACK FOODS CORP \\ 
+PLEXUS CORP \\ 
+ROCKY MOUNTAIN CHOCOLATE FAC INC \\ 
+ADAMS EXPRESS CO \\ 
+ORACLE CORP \\ 
+\hline \\[-1.8ex] 
+\end{tabular} 
+\end{table} 
+$$

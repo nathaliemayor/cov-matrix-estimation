@@ -1,0 +1,84 @@
+---
+title: "2. Introduction"
+author: "Nathalie Mayor"
+output: 
+  pdf_document:
+header-includes:
+    - \usepackage{setspace}\doublespacing
+    - \usepackage{float}
+bibliography: thesis.bib
+link-citations: yes
+linkcolor: blue
+---
+
+- @van2016ridge, Ridge estimation of inverse covariance matrices from high-dimensional data
+- @lee2011risk, Risk-based asset allocation: A new answer to an old question?
+- @demiguel2009generalized, A generalized approach to portfolio optimization: Improving performance by constraining portfolio norms
+- @goto2015improving, Improving mean variance optimization through sparse hedging restrictions
+- @carrasco2011optimal, Optimal portfolio selection using regularization
+- @ardia2017impact, The impact of covariance misspecification in risk-based portfolios
+- @neffelli2018target, Target matrix estimators in risk-based portfolios
+- @kovacs2021graphical, Graphical Elastic Net and Target Matrices: Fast Algorithms and Software for Sparse Precision Matrix Estimation
+- @chen2010shrinkage, Shrinkage algorithms for MMSE covariance estimation
+- @lancewicki2014multi, Multi-target shrinkage estimation for covariance matrices
+- @sancetta2008sample, Sample covariance shrinkage for high dimensional dependent data
+- @witten2009covariance, Covariance-regularized regression and classification for high dimensional problems
+- @friedman2008sparse, Sparse inverse covariance estimation with the graphical lasso
+- @benninga2007shrinking, Shrinking the covariance matrix-simpler is better
+- @ollila2014regularized, Regularized $M$-estimators of scatter matrix
+- @tyler1987distribution, A distribution-free M-estimator of multivariate scatter
+- @gray2018shrinkage, Shrinkage estimation of large covariance matrices using multiple shrinkage targets
+- @abadir2014design, Design-free estimation of variance matrices
+- @dempster1972covariance, Covariance selection
+- @stevens1998inverse, On the inverse of the covariance matrix in portfolio analysis
+- @coqueret2014estimating, Estimating covariance matrices for portfolio optimization
+- @sun2019improved, Improved covariance matrix estimation for portfolio risk measurement: A review
+- @haff1980empirical, Empirical Bayes estimation of the multivariate normal covariance matrix
+- @ollila2019optimal, Optimal shrinkage covariance matrix estimation under random sampling from elliptical distributions
+- @deng2013penalized, Penalized covariance matrix estimation using a matrix-logarithm transformation
+- @de2020oops, Oops! I Shrunk the Sample Covariance Matrix Again: Blockbuster Meets Shrinkage
+- @ledoit2003improved, Improved estimation of the covariance matrix of stock returns with an application to portfolio selection
+- @ledoit2004well, A well-conditioned estimator for large-dimensional covariance matrices
+- @ledoit2022power, The power of (non-) linear shrinking: A review and guide to covariance matrix estimation
+- @ledoit2021shrinkage, Shrinkage estimation of large covariance matrices: Keep it simple, statistician?
+- @ledoit2017nonlinear, Nonlinear shrinkage of the covariance matrix for portfolio selection: Markowitz meets Goldilocks
+- @ledoit2004honey, Honey, I shrunk the sample covariance matrix
+- @ledoit2015spectrum, A unified framework for covariance matrix estimation and pca in large dimensions
+- @pourahmadi2013high, High-dimensional covariance estimation: with high-dimensional data
+- @markowitz1959portfolio, Portfolio Selection: Efficient Diversification of Investments
+- @markowitz1952portfolio, Portfolio Selection
+- @stein1956some, Some problems in multivariate analysis, Part I
+- @stein1975estimation, Estimation of a covariance matrix, Rietz Lecture
+- @dey1985estimation, Estimation of a covariance matrix under stein’s loss
+- @haff1980empirical, Empirical bayes estimation of the multivariate normal covariance matrix. 
+- @won2013condition, Condition- number-regularized covariance estimation
+- @elton2009modern, Modern portfolio theory and investment analysis
+- @söderlind, theory of finance, lecture notes, chapters 2, 3
+
+\newpage
+
+# References
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
