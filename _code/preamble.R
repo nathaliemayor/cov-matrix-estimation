@@ -42,6 +42,7 @@ library(ggrepel)
 conflict_prefer("filter", "dpylr")
 conflict_prefer("select", "dpylr")
 conflict_prefer("rename", "dpylr")
+conflict_prefer("lag", "dpylr")
 
 # load own functions
 # load Ledoit-Wolf functions
