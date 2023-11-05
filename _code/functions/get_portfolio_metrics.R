@@ -61,15 +61,17 @@ get_portfolio_metrics <- function (
     inverse_sigma_hat = solve(sigma_hat)
     if (portfolio_optimization == "tangent") {
       # tangent portfolio from Markowitz formula
-      rf <- window(TNX, 
-                   start = first(training_date), 
-                   end = last(training_date))$TNX.Adjusted %>% 
+      rf <- window(TNX,
+                   start = first(training_date),
+                   end = last(training_date))$TNX.Adjusted %>%
         # get average monthly rate, percentage to decimal
-        mean(na.rm = T)/freq
+        mean(na.rm = T)/freq/100
       
       excess_er_hat <- colMeans(training_data - rf) 
-      optimal_weights <- (inverse_sigma_hat %*% excess_er_hat)/ 
-        sum(inverse_sigma_hat %*% excess_er_hat)
+      optimal_weights_list <- tangency.portfolio(excess_er_hat, sigma_hat, rf)
+      optimal_weights <- optimal_weights_list$weights
+      # optimal_weights <- (inverse_sigma_hat %*% excess_er_hat)/ 
+      #   sum(inverse_sigma_hat %*% excess_er_hat)
       
       if (short == FALSE) {
         optimal_weights <- quadprog::solve.QP(
@@ -89,12 +91,14 @@ get_portfolio_metrics <- function (
     }
   }
   period_returns <- rowSums(testing_data[,-1]*optimal_weights) %>% 
-    data_frame(date=date_test, returns = .)
+    tibble(date=date_test, returns = .)
   ptf_variance <- t(as.matrix(optimal_weights)) %*% 
     as.matrix(cov(testing_data[,-1])) %*% 
     as.matrix(optimal_weights)
   ptf_sd <- sqrt(ptf_variance)
   ptf_sd_simple <- sd(period_returns$returns)
   SR <- (mean(period_returns$returns)/ptf_sd)*sqrt(freq)
+  # results <- period_returns
   results = list(period_returns, ptf_sd, SR)
 }
+

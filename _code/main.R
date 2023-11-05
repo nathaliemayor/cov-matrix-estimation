@@ -106,7 +106,6 @@ cov_est_method = c(
 
 roll <- seq(1, k - training_period, rolling_period)
 
-
 # ------------------------------------------------------------------------------
 #                 HISTORICAL DATA - COMPUTE PORTFOLIOS
 # ------------------------------------------------------------------------------
@@ -119,27 +118,33 @@ test_rolling_cov_method <- pmap(
   short = TRUE, 
   factor_returns = factors
 )
+method_order <- crossing(cov_est_method, roll) %>% 
+  dplyr::select(cov_est_method) %>% 
+  unique()
 
-names(test_rolling_cov_method) <- rep(cov_est_method, each=length(roll))
+names(test_rolling_cov_method) <- rep(
+  method_order$cov_est_method, 
+  each=length(roll)
+  )
 
 results_by_cov <- lapply(
-  seq(1,(length(cov_est_method)-1)*length(roll)+1, length(roll)), 
+  seq(1,(length(method_order$cov_est_method)-1)*length(roll)+1, length(roll)), 
   function(x) 
     test_rolling_cov_method[x:(x+length(roll)-1)]
 )
 
-names(results_by_cov) <- cov_est_method
+names(results_by_cov) <- method_order$cov_est_method
 
-all_avg_returns <- lapply(cov_est_method, function(cov) 
+all_avg_returns <- lapply(method_order$cov_est_method, function(cov) 
   results_by_cov[[cov]] %>% 
-    map_depth(1,1) %>% 
+    map_depth(1,1) %>%
     reduce(rbind) %>% 
     filter(!is.na(returns)) %>% 
     summarise(mean = mean(returns))) %>% 
   unlist %>% 
   reduce(append)
 
-all_avg_sd <- lapply(cov_est_method, function(cov) 
+all_avg_sd <- lapply(method_order$cov_est_method, function(cov) 
   results_by_cov[[cov]] %>% 
     map_depth(1,2) %>% 
     reduce(append) %>% 
@@ -149,10 +154,10 @@ all_avg_sd <- lapply(cov_est_method, function(cov)
 
 ggplot(
   data_frame(
-    method = cov_est_method, 
+    method = method_order$cov_est_method, 
     returns = all_avg_returns, 
     sd = all_avg_sd
-  ) %>% filter(!method %in% c("huge_glasso", "gis")),
+  ) %>% filter(!method %in% c("CovMcd")),
   aes(x = sd, y = returns)) +
   geom_point() +
   geom_label_repel(
