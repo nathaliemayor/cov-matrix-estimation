@@ -114,7 +114,8 @@ get_covariance_estimate <- function(
         diag(diag(Psi))
     }
   }else if (method == "sample") {
-    sigma_hat = cov(data)
+    sigma_hat = cov(data, method = "spearman")
   }
   return(sigma_hat) 
 }
+

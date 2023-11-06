@@ -12,7 +12,7 @@ gis <- function(Y, k = -1) {
   }
   n <- N - k    # effective sample size
   c <- p / n    # concentration ratio
-  sample <- (t(Y) %*% Y) / n    # sample covariance matrix    
+  sample <- (t(Y) %*% Y) / n        # sample covariance matrix    
   spectral <- eigen(sample)    # spectral decompositon
   lambda <- spectral$values[p:1]    # sort eigenvalues in ascending order
   u <- spectral$vectors[,p:1]    # eigenvectors follow their eigenvalues

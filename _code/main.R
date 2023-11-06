@@ -90,7 +90,7 @@ cov_est_method = c(
   "covCor", 
   "covDiag", 
   "covMarket",
-  "gis", 
+  "gis",
   "qis", 
   "lis",
   # "CovMve", 
@@ -109,7 +109,7 @@ roll <- seq(1, k - training_period, rolling_period)
 # ------------------------------------------------------------------------------
 #                 HISTORICAL DATA - COMPUTE PORTFOLIOS
 # ------------------------------------------------------------------------------
-
+# cov_est_method <- "sample"
 test_rolling_cov_method <- pmap(
   crossing(cov_est_method, roll),
   get_portfolio_metrics, 
@@ -140,7 +140,8 @@ all_avg_returns <- lapply(method_order$cov_est_method, function(cov)
     map_depth(1,1) %>%
     reduce(rbind) %>% 
     filter(!is.na(returns)) %>% 
-    summarise(mean = mean(returns))) %>% 
+    summarise(mean = mean(returns))
+  ) %>% 
   unlist %>% 
   reduce(append)
 
@@ -157,7 +158,7 @@ ggplot(
     method = method_order$cov_est_method, 
     returns = all_avg_returns, 
     sd = all_avg_sd
-  ) %>% filter(!method %in% c("CovMcd")),
+  ) %>% filter(!method %in% c("cov2Para")),
   aes(x = sd, y = returns)) +
   geom_point() +
   geom_label_repel(
@@ -170,5 +171,45 @@ ggplot(
   theme_hsg() +
   # xlim(c(11,24)) +
   ggtitle("Tangent portfolios with various covariance matrix estimation methods")
+
+all_avg_sr <- lapply(method_order$cov_est_method, function(cov) 
+  results_by_cov[[cov]] %>% 
+    map_depth(1,3) %>% 
+    reduce(append) %>% 
+    na.omit %>% 
+    mean) %>% 
+  reduce(append)
+
+all_weights <- lapply(method_order$cov_est_method, function(cov) 
+  data <- results_by_cov[[cov]] %>% 
+    map_depth(1,4) %>% 
+    reduce(cbind) %>% 
+    t %>% 
+    as_tibble %>% 
+    mutate(date = seq.Date(
+      from = as.Date("1973-06-01"), 
+      to = as.Date("2018-03-01"), 
+      by = "6 month"
+    )
+    ) %>% 
+    dplyr::select(date, everything()) %>% 
+    pivot_longer(!date) %>% 
+    mutate(method = cov)
+  ) %>% 
+  reduce(rbind)
+
+all_weights %>% 
+  filter(method == "sample") %>% 
+  ggplot(aes(x=date, y=value, group = name)) +
+  geom_boxplot(fill = "lightblue") +
+  facet_wrap(~method, scales = "free", ncol = 1) +
+  theme_hsg()
+
+
+
+
+
+
+
 
 
