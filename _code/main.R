@@ -158,7 +158,7 @@ ggplot(
     method = method_order$cov_est_method, 
     returns = all_avg_returns, 
     sd = all_avg_sd
-  ) %>% filter(!method %in% c("cov2Para")),
+  ) %>% filter(!method %in% "CovMcd"),
   aes(x = sd, y = returns)) +
   geom_point() +
   geom_label_repel(
@@ -179,6 +179,13 @@ all_avg_sr <- lapply(method_order$cov_est_method, function(cov)
     na.omit %>% 
     mean) %>% 
   reduce(append)
+
+data.frame(
+  method_order$cov_est_method, 
+  all_avg_returns, 
+  all_avg_sd, all_avg_sr
+  ) %>% 
+  arrange(-all_avg_sr)
 
 all_weights <- lapply(method_order$cov_est_method, function(cov) 
   data <- results_by_cov[[cov]] %>% 
@@ -205,11 +212,93 @@ all_weights %>%
   facet_wrap(~method, scales = "free", ncol = 1) +
   theme_hsg()
 
+# ------------------------------------------------------------------------------
+#                 BOOTSTRAPPED PORTFOLIO DATA
+# ------------------------------------------------------------------------------
+n_bootstraps <- 20
+stock_returns <- bootstrapped_portfolios(ff100_data$monthly, n_bootstraps)
 
+get_portfolio_metrics(stock_returns = stock_returns[[1]], cov_est_method = "sample",
+                      roll = 1, portfolio_optimization = "tangent")
 
+# cov_est_method <- "sample"
+test_rolling_bootstrap <- pmap(
+  crossing(stock_returns, roll),
+  get_portfolio_metrics, 
+  cov_est_method = "sample",
+  portfolio_optimization = "tangent",
+  short = TRUE, 
+  factor_returns = factors
+)
 
+names(test_rolling_bootstrap) <- rep(
+  1:n_bootstraps, 
+  each=length(roll)
+)
 
+results_by_bootstrap <- lapply(
+  seq(1,(n_bootstraps-1)*length(roll)+1, length(roll)), 
+  function(x) 
+    test_rolling_bootstrap[x:(x+length(roll)-1)]
+)
 
+names(results_by_bootstrap) <- 1:n_bootstraps
 
+all_avg_returns_bootstrap <- lapply(1:n_bootstraps, function(x) 
+  results_by_bootstrap[[x]] %>% 
+    map_depth(1,1) %>%
+    reduce(rbind) %>% 
+    filter(!is.na(returns)) %>% 
+    summarise(mean = mean(returns))
+) %>% 
+  unlist %>% 
+  reduce(append)
+
+all_avg_sd_bootstrap <- lapply(1:n_bootstraps, function(x) 
+  results_by_bootstrap[[x]] %>% 
+    map_depth(1,2) %>% 
+    reduce(append) %>% 
+    na.omit %>% 
+    mean) %>% 
+  reduce(append)
+
+ggplot(
+  data_frame(
+    method = 1:n_bootstraps, 
+    returns = all_avg_returns_bootstrap, 
+    sd = all_avg_sd_bootstrap
+  ),
+  aes(x = sd, y = returns)) +
+  geom_point() +
+  geom_label_repel(
+    aes(label = method),
+    box.padding = 1,
+    point.padding = 1,
+    segment.color = "grey",
+    color = "darkgreen"
+  ) +
+  theme_hsg() +
+  # xlim(c(11,24)) +
+  ggtitle("Tangent portfolios with various covariance matrix estimation methods")
+
+ggplot(
+  data_frame(
+    method = 1:n_bootstraps, 
+    returns = all_avg_returns_bootstrap, 
+    sd = all_avg_sd_bootstrap
+  ),
+  aes(x = sd, y = returns)) +
+  geom_density2d_filled(show.legend = F) +
+  coord_cartesian(expand = F) +
+  geom_label_repel(
+    aes(label = method),
+    box.padding = 1,
+    point.padding = 1,
+    segment.color = "grey",
+    color = "darkgreen"
+  ) +
+  theme_hsg() +
+  # xlim(c(11,24)) +
+  ggtitle("Tangent portfolios with various covariance matrix estimation methods")
 
 

@@ -6,7 +6,6 @@
 local_libs <- list.files("lib", full.names = T)
 lapply(local_libs[1], install.packages, repos=NULL, type="source")
 # general
-library(dplyr)
 library(tidyverse)
 library(xts)
 library(zoo)
@@ -43,6 +42,7 @@ conflict_prefer("filter", "dpylr")
 conflict_prefer("select", "dpylr")
 conflict_prefer("rename", "dpylr")
 conflict_prefer("lag", "dpylr")
+conflict_prefer("first", "dpylr")
 
 # load own functions
 # load Ledoit-Wolf functions

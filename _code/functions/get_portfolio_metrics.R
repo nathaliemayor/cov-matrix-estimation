@@ -19,11 +19,6 @@ get_portfolio_metrics <- function (
     frequency = "monthly", 
     factor_returns = NULL
 ) {
-  rf <- window(TNX,
-               start = first(training_date),
-               end = last(training_date))$TNX.Adjusted %>%
-    # get average monthly rate, percentage to decimal
-    mean(na.rm = T)/freq/100
   if(frequency == "monthly"){
     freq <- 12
   }else if(frequency == "daily"){
@@ -37,6 +32,15 @@ get_portfolio_metrics <- function (
     roll:(training_period+roll-1),
     1
   ]
+  
+  # rf <- window(TNX,
+  #              start = first(training_date),
+  #              end = last(training_date))$TNX.Adjusted %>%
+  #   # get average monthly rate, percentage to decimal
+  #   mean(na.rm = T)/freq
+  
+  rf <- 0.44
+  
   if(cov_est_method %in% c("factor1", "factor3")){
     training_factor_data <- factor_returns[
       roll:(training_period+roll-1),
