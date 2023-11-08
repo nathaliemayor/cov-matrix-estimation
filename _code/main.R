@@ -5,7 +5,8 @@
 source("preamble.R")
 
 # define paths 
-data_path <- "/Users/pro/Library/Mobile Documents/com~apple~CloudDocs/masters_thesis/data/"
+core_path <- "/Users/pro/Library/Mobile Documents/com~apple~CloudDocs"
+data_path <- "masters_thesis/data"
 from_date <- as.Date("1958-02-01")
 to_date <- as.Date("2018-02-01")
 
@@ -18,29 +19,11 @@ data_files_names <- c(
   "100_Portfolios_10x10_Daily.CSV"
   )
 
-ff100_data <- lapply(data_files_names, function(file_name){
-  data <- rio::import(
-    file.path(
-      data_path, 
-      file_name
-    ), skip = 15
-  ) %>% 
-    suppressWarnings %>% 
-    mutate(Date = as.Date(paste0(V1,"01"), format = "%Y%m%d")) %>% 
-    dplyr::select(
-      Date, everything(), 
-      -V1
-    ) %>% 
-    dplyr::filter(Date >= from_date & Date <= to_date)
-  
-  sum_of_col <- as.data.frame(data == -99.99) %>% 
-    colSums %>% 
-    tibble(num = ., name = names(.)) %>% 
-    dplyr::filter(num > 0)
-  
-  data_clean <- data %>% 
-    dplyr::select(-sum_of_col$name)
-})
+ff100_data <- lapply(
+  data_files_names, 
+  get_data, 
+  path = file.path(core_path,data_path)
+)
 names(ff100_data) <- c("monthly", "daily")
 
 # get 10-year Treasury notes and S&P500 data monthly and daily
@@ -215,7 +198,7 @@ all_weights %>%
 # ------------------------------------------------------------------------------
 #                 BOOTSTRAPPED PORTFOLIO DATA
 # ------------------------------------------------------------------------------
-n_bootstraps <- 20
+n_bootstraps <- 1000
 stock_returns <- bootstrapped_portfolios(ff100_data$monthly, n_bootstraps)
 
 get_portfolio_metrics(stock_returns = stock_returns[[1]], cov_est_method = "sample",
@@ -225,7 +208,7 @@ get_portfolio_metrics(stock_returns = stock_returns[[1]], cov_est_method = "samp
 test_rolling_bootstrap <- pmap(
   crossing(stock_returns, roll),
   get_portfolio_metrics, 
-  cov_est_method = "sample",
+  cov_est_method = "factor1",
   portfolio_optimization = "tangent",
   short = TRUE, 
   factor_returns = factors
@@ -279,14 +262,14 @@ ggplot(
   ) +
   theme_hsg() +
   # xlim(c(11,24)) +
-  ggtitle("Tangent portfolios with various covariance matrix estimation methods")
+  ggtitle("Bootstrapped tangent portfolios for a given estimation method")
 
 ggplot(
   data_frame(
     method = 1:n_bootstraps, 
     returns = all_avg_returns_bootstrap, 
     sd = all_avg_sd_bootstrap
-  ),
+  ) %>% filter(!method %in% c(50,995,257,46,136,140,127,7,286,563,16,1000,827,145,540,567,1,840)),
   aes(x = sd, y = returns)) +
   geom_density2d_filled(show.legend = F) +
   coord_cartesian(expand = F) +
@@ -299,6 +282,23 @@ ggplot(
   ) +
   theme_hsg() +
   # xlim(c(11,24)) +
-  ggtitle("Tangent portfolios with various covariance matrix estimation methods")
+  ggtitle("Tangent portfolios with various covariance matrix estimation methods") +
+  xlim(c(0,10)) +
+  ylim(c(0,2))
+
+df<-  data_frame(
+  method = 1:n_bootstraps, 
+  returns = all_avg_returns_bootstrap, 
+  sd = all_avg_sd_bootstrap
+) %>% filter(!method %in% c(11,13))
+
+mean(df$returns)
+mean(df$sd)
+
+
+
+
+
+
 
 

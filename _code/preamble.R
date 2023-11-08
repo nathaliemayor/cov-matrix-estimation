@@ -2,7 +2,6 @@
 #                 PREAMBLE - LOAD PACKAGES AND USER DEFINED FUNCTIONS
 # ------------------------------------------------------------------------------
 # install and load local libraries 
-# TODO: ADD THIS TO A PREAMBLE FILE WITH LIST OF PACKAGES, CHECK INSTALL + CALL
 local_libs <- list.files("lib", full.names = T)
 lapply(local_libs[1], install.packages, repos=NULL, type="source")
 # general
@@ -38,11 +37,11 @@ library(ThemePark)
 library(ggrepel)
 
 # reslove confilcts
-conflict_prefer("filter", "dpylr")
-conflict_prefer("select", "dpylr")
-conflict_prefer("rename", "dpylr")
-conflict_prefer("lag", "dpylr")
-conflict_prefer("first", "dpylr")
+conflict_prefer("filter", "dplyr")
+conflict_prefer("select", "dplyr")
+conflict_prefer("rename", "dplyr")
+conflicts_prefer(stats::lag)
+conflict_prefer("first", "dplyr")
 
 # load own functions
 # load Ledoit-Wolf functions
@@ -54,3 +53,4 @@ lapply(
   ),
   source
 ) %>% invisible
+

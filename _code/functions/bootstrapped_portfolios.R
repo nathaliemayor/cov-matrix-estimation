@@ -9,7 +9,7 @@ bootstrapped_portfolios <- function(
     data,
     n_bootstraps
     ) {
-  set.seed(123)
+  set.seed(7895)
   
   n_rows <- nrow(data)
   dates <- data$Date
