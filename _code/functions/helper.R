@@ -20,7 +20,6 @@ demeaning_matrix <- function(n_observations){
   return(result)
 }
 
-
 ##### CLASSIC COVARIANCE MATRIX
 # main_matrix is optional
 # If main_matrix is specified, the demeaning is done using the mean of the columns of main_matrix
@@ -34,3 +33,6 @@ classic_covariance_matrix <- function(x) {
   covariance_matrix =  (x_transpose %*% m %*% x)/ n # [k x k] 
   return(covariance_matrix)
 }
+
+#getting the convex hull of each unique point set
+find_hull <- function(df) df[chull(df$returns, df$sd), ]

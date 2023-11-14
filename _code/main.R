@@ -44,7 +44,7 @@ gspc_monthly <- GSPC$GSPC.Adjusted %>%
 # https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html
 # Fama/French 3 Factors, CSV
 factors <- rio::import(
-  file.path(data_path, "F-F_Research_Data_Factors.CSV")
+  file.path(core_path,data_path, "F-F_Research_Data_Factors.CSV")
 ) %>% 
   mutate(V1 = as.Date(
     V1 %>% paste0("01"), 
@@ -123,7 +123,7 @@ all_avg_returns <- lapply(method_order$cov_est_method, function(cov)
     map_depth(1,1) %>%
     reduce(rbind) %>% 
     filter(!is.na(returns)) %>% 
-    summarise(mean = mean(returns))
+    dplyr::summarise(mean = mean(returns))
   ) %>% 
   unlist %>% 
   reduce(append)
@@ -137,11 +137,12 @@ all_avg_sd <- lapply(method_order$cov_est_method, function(cov)
   reduce(append)
 
 ggplot(
-  data_frame(
+  tibble(
     method = method_order$cov_est_method, 
     returns = all_avg_returns, 
     sd = all_avg_sd
-  ) %>% filter(!method %in% "CovMcd"),
+  ) %>% add_row(method = "daily_sample", returns = 0.924, sd = 2.65) %>% 
+  filter(!method %in% "CovMcd"),
   aes(x = sd, y = returns)) +
   geom_point() +
   geom_label_repel(
@@ -168,7 +169,7 @@ data.frame(
   all_avg_returns, 
   all_avg_sd, all_avg_sr
   ) %>% 
-  arrange(-all_avg_sr)
+  dplyr::arrange(-all_avg_sr)
 
 all_weights <- lapply(method_order$cov_est_method, function(cov) 
   data <- results_by_cov[[cov]] %>% 
@@ -189,111 +190,70 @@ all_weights <- lapply(method_order$cov_est_method, function(cov)
   reduce(rbind)
 
 all_weights %>% 
-  filter(method == "sample") %>% 
+  filter(method == "cov1Para") %>% 
   ggplot(aes(x=date, y=value, group = name)) +
   geom_boxplot(fill = "lightblue") +
   facet_wrap(~method, scales = "free", ncol = 1) +
   theme_hsg()
 
+test_daily <- lapply(
+  roll,
+  get_portfolio_metrics,
+  stock_returns = ff100_data$daily,
+  cov_est_method = "cov1Para",
+  portfolio_optimization = "tangent",
+  short = TRUE,
+  frequency = "daily",
+  factor_returns  = NULL
+)
+
+test_daily %>%  
+  map_depth(1,1) %>%
+  reduce(rbind) %>% 
+  filter(!is.na(returns)) %>% 
+  dplyr::summarise(mean = mean(returns)*21)
+
+test_daily %>%  
+  map_depth(1,2) %>%
+  reduce(rbind) %>% 
+  na.omit() %>% 
+  mean()*sqrt(21)
+
+test_daily %>%  
+  map_depth(1,3) %>%
+  reduce(rbind) %>% 
+  na.omit() %>% 
+  mean()
+
+  
+  
+
 # ------------------------------------------------------------------------------
 #                 BOOTSTRAPPED PORTFOLIO DATA
 # ------------------------------------------------------------------------------
-n_bootstraps <- 1000
-stock_returns <- bootstrapped_portfolios(ff100_data$monthly, n_bootstraps)
+n_bootstraps <- 10
 
-get_portfolio_metrics(stock_returns = stock_returns[[1]], cov_est_method = "sample",
-                      roll = 1, portfolio_optimization = "tangent")
+df_all <- lapply(cov_est_method, 
+       bootstrap_cov_estimates, 
+       roll=roll, 
+       n_bootstraps=n_bootstraps) %>% 
+  reduce(rbind)
 
-# cov_est_method <- "sample"
-test_rolling_bootstrap <- pmap(
-  crossing(stock_returns, roll),
-  get_portfolio_metrics, 
-  cov_est_method = "factor1",
-  portfolio_optimization = "tangent",
-  short = TRUE, 
-  factor_returns = factors
-)
+#getting the convex hull of each unique point set
 
-names(test_rolling_bootstrap) <- rep(
-  1:n_bootstraps, 
-  each=length(roll)
-)
+load(file.path(core_path, data_path, "bootstrap_cov.RData"))
 
-results_by_bootstrap <- lapply(
-  seq(1,(n_bootstraps-1)*length(roll)+1, length(roll)), 
-  function(x) 
-    test_rolling_bootstrap[x:(x+length(roll)-1)]
-)
+df_all_bis <- df_all %>% filter(returns < 500, sd < 500)
 
-names(results_by_bootstrap) <- 1:n_bootstraps
+hulls <- ddply(df_all_bis,"method", find_hull)
 
-all_avg_returns_bootstrap <- lapply(1:n_bootstraps, function(x) 
-  results_by_bootstrap[[x]] %>% 
-    map_depth(1,1) %>%
-    reduce(rbind) %>% 
-    filter(!is.na(returns)) %>% 
-    summarise(mean = mean(returns))
-) %>% 
-  unlist %>% 
-  reduce(append)
+ggplot(data = df_all_bis, 
+               aes(x = sd, y = returns, colour=method, fill = method)) +
+  geom_point() + 
+  geom_polygon(data = hulls, alpha = 0.5) +
+  labs(x = "sd", y = "returns")
 
-all_avg_sd_bootstrap <- lapply(1:n_bootstraps, function(x) 
-  results_by_bootstrap[[x]] %>% 
-    map_depth(1,2) %>% 
-    reduce(append) %>% 
-    na.omit %>% 
-    mean) %>% 
-  reduce(append)
-
-ggplot(
-  data_frame(
-    method = 1:n_bootstraps, 
-    returns = all_avg_returns_bootstrap, 
-    sd = all_avg_sd_bootstrap
-  ),
-  aes(x = sd, y = returns)) +
-  geom_point() +
-  geom_label_repel(
-    aes(label = method),
-    box.padding = 1,
-    point.padding = 1,
-    segment.color = "grey",
-    color = "darkgreen"
-  ) +
-  theme_hsg() +
-  # xlim(c(11,24)) +
-  ggtitle("Bootstrapped tangent portfolios for a given estimation method")
-
-ggplot(
-  data_frame(
-    method = 1:n_bootstraps, 
-    returns = all_avg_returns_bootstrap, 
-    sd = all_avg_sd_bootstrap
-  ) %>% filter(!method %in% c(50,995,257,46,136,140,127,7,286,563,16,1000,827,145,540,567,1,840)),
-  aes(x = sd, y = returns)) +
-  geom_density2d_filled(show.legend = F) +
-  coord_cartesian(expand = F) +
-  geom_label_repel(
-    aes(label = method),
-    box.padding = 1,
-    point.padding = 1,
-    segment.color = "grey",
-    color = "darkgreen"
-  ) +
-  theme_hsg() +
-  # xlim(c(11,24)) +
-  ggtitle("Tangent portfolios with various covariance matrix estimation methods") +
-  xlim(c(0,10)) +
-  ylim(c(0,2))
-
-df<-  data_frame(
-  method = 1:n_bootstraps, 
-  returns = all_avg_returns_bootstrap, 
-  sd = all_avg_sd_bootstrap
-) %>% filter(!method %in% c(11,13))
-
-mean(df$returns)
-mean(df$sd)
+save(df_all, file = file.path(core_path, data_path, "bootstrap_cov.Rdata"))
 
 
 

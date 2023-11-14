@@ -23,7 +23,7 @@ bootstrapped_portfolios <- function(
     bootstrap_returns[x:(x+91)] %>% 
       reduce(cbind) %>% 
       as_tibble %>% 
-      mutate(Date=dates) %>% 
+      dplyr::mutate(Date=dates) %>% 
       dplyr::select(Date, everything())
   })
   return(bs_list)

@@ -59,7 +59,6 @@ get_covariance_estimate <- function(
         data
       )
     )
-    
     principal_components <- pca_results$rotation
     eigenvalues <- pca_results$sdev^2
     
@@ -113,8 +112,9 @@ get_covariance_estimate <- function(
         t(beta) +
         diag(diag(Psi))
     }
-  }else if (method == "sample") {
-    sigma_hat = cov(as.data.frame(data), method = "kendall")
-  }
+  } else if (method == "sample") {
+    # sigma_hat = cov(as.data.frame(data), method = "pearson")
+    sigma_hat <- (t(as.matrix(data)) %*% as.matrix(data)) / (dim(data)[1]-1)   
+  } 
   return(sigma_hat) 
 }
