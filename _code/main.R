@@ -255,7 +255,21 @@ ggplot(data = df_all_bis,
 
 save(df_all, file = file.path(core_path, data_path, "bootstrap_cov.Rdata"))
 
+test_daily <- pmap(
+  tibble(data = ff100_data, frequency = c("monthly", "daily")),
+  bootstrap_cov_estimates,
+  roll = roll,
+  n_bootstraps = 100,
+  cov_est_method = "sample"
+)
 
+test_daily$daily <- test_daily$daily %>% mutate(method = "sample_daily")
+
+test_daily %>% 
+  reduce(rbind) %>% 
+  filter(returns < 50 & sd < 200) %>% 
+  ggplot(aes(x=sd, y = returns, color = method)) +
+  geom_point()
 
 
 

@@ -105,13 +105,15 @@ get_portfolio_metrics <- function (
     }
   }
   period_returns <- rowSums(testing_data[,-1]*optimal_weights) %>% 
-    tibble(date=date_test, returns = .)
+    tibble(date=date_test, returns = .*multiplicator)
   ptf_variance <- t(as.matrix(optimal_weights)) %*% 
     as.matrix(cov(testing_data[,-1])) %*% 
     as.matrix(optimal_weights)
-  ptf_sd <- sqrt(ptf_variance)
+  ptf_sd <- sqrt(ptf_variance)*sqrt(multiplicator)
 
-  SR <- ((mean(period_returns$returns)-rf_sr)/ptf_sd)*sqrt(freq)
+  SR <- ((mean(period_returns$returns)-rf_sr)/ptf_sd)*
+    sqrt(freq)*
+    sqrt(multiplicator)
   # results <- period_returns
   results = list(period_returns, ptf_sd, SR, optimal_weights)
 }

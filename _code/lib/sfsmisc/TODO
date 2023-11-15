@@ -1,0 +1,40 @@
+##-*- org -*-
+* TODO *formally* deprecate repChar() and bl.string() in favor of R (>= 3.3.0)  strrep()
+* TODO maybe add  deparse1seq() from ~/R/Pkgs/DPQmpfr/R/dpoisEr.R ?
+* TODO  more to sessionInfoX(); chk openBLAS etc, see more moreSessionInfo() in robustbase,
+  ~/R/Pkgs/robustbase/inst/xtraR/platform-sessionInfo.R
+* TODO finish and export pkgLibs() R/unix/package-props.R
+* TODO New utilities for MASS::boxcox() "diagnostics", notably histogram nicely labeled
+** --> ~/R/MM/Pkg-ex/microbenchmark/seq-mb.R
+** Maybe ask Brian about willingness to improve:  boxcox(*, plotit=TRUE) looks nice,
+** but the estimate + conf.interval computations are inside the plotting, not available as numbers
+* TODO Better ylim for boxplot(<microbenchmark>), see, ~/R/MM/Pkg-ex/microbenchmark/simple-ex.R
+* TODO mat2tex() is really not flexible enough; and there are better functions
+   in other packages, e.g. latex in 'Hmisc' --> deprecate this! [2005-04]
+
+* TODO str_data() could become more flexible (class = ".";
+  also (optionally) return class + dim()/length(); see 'TODO' in [[R/str_data.R]]
+* TODO is.whole() [[R/misc-goodies.R]] conflicts with gmp::is.whole() -- as it has a 'tolerance'
+
+* TODO move some demo/*.R to vignettes/*.Rmd -- notably the prime-numbers (for those, see also below)
+* TODO clean up R/prime-numbers-fn.R -- move all non-exported functions to
+** TODO (a new file)             ./inst/primes-extra-fns.R
+** TODO and source() that from   ./demo/prime-numbers.R    !!
+* Reverse Dep. status: 2014-06-16 http://stat.ethz.ch/CRAN/web/packages/sfsmisc/
+** Reverse depends: ascrda, catIrt, distr, ICEbox, lordif, modiscloud, plfm, polycor, random.polychor.pa
+** Reverse imports: CDM, Demerelate, FrF2, lokern, mcmcplots, ReliabilityTheory, simsalapar, sirt, TAM
+
+* TODO Improve ps.end(): should return something useful
+  ==> new ./tests/psend-ex.R which tests that 2 x {ps.do() ... ps.end()}
+  *does* work properly
+* TODO eaxis() [ ./R/prettylab.R ] :
+** TODO allow  log2-scale and "2^..." labelling --- or log_k and 'k^..'
+** DONE a range where the *defaults* of eaxis were completely bad
+     because of axTicks(*, log=TRUE) can be bad:
+    curve(qgamma(1e-100, x, lower.tail=FALSE), 1e-110, 1e-70, log="xy", col=2, axes=FALSE)
+    eaxis(1);eaxis(2)
+* TODO Work on R/approx2.R, for now [[approx2.R]] -- implement remaining "vectorized" part
+
+* DONE 2017-08-xx: in [[DESCRIPTION]], use Authors@R with Werner, Andreas, .., Alain, ..
+* DONE 2008-10-22: Copied  boxplot.matrix() to R-devel (2.9.0 to be)
+   Remove this from 'sfsmisc' eventually.
