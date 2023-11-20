@@ -19,6 +19,8 @@ get_covariance_estimate <- function(
     sigma_hat = cov2Para(Y = data)
   } else if (method == "covCor") {
     sigma_hat = covCor(Y = data)
+  } else if (method == "CCM") {
+    sigma_hat = CCM(returns = data)
   } else if (method == "covDiag") {
     sigma_hat = covDiag(Y = data)
   } else if (method == "covMarket") {

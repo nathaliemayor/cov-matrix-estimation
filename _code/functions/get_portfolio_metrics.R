@@ -86,15 +86,17 @@ get_portfolio_metrics <- function (
 
       optimal_weights <- (inverse_sigma_hat %*% excess_er_hat)/
         sum(inverse_sigma_hat %*% excess_er_hat)
-      
       if (short == FALSE) {
-        optimal_weights <- quadprog::solve.QP(
-          inverse_sigma_hat,
-          excess_er_hat,
-          cbind(rep(1, length(excess_er_hat)), 
-                diag(1, nrow = length(excess_er_hat))),
-          c(1, rep(0, length(excess_er_hat))),
-        )$solution
+        n_assets <- length(excess_er_hat)
+        # Set up the optimization problem
+        Dmat <- 2 * sigma_hat
+        dvec <- -excess_er_hat
+        Amat <- cbind(rep(1, n_assets), diag(n_assets))
+        bvec <- c(1, rep(0, n_assets))
+        # Additional constraint: no short selling
+        meq <- 1  # Constraint: weights sum to 1
+        # Solve the quadratic programming problem
+        optimal_weights <- solve.QP(Dmat, dvec, Amat, bvec, meq = meq)$solution
       }
     } else if (portfolio_optimization == "minvar") {
       # minvar portfolio from Markowitz formula
@@ -105,15 +107,15 @@ get_portfolio_metrics <- function (
     }
   }
   period_returns <- rowSums(testing_data[,-1]*optimal_weights) %>% 
-    tibble(date=date_test, returns = .*multiplicator)
+    tibble(date=date_test, returns = .) %>% 
+    mutate(returns = returns*multiplicator)
   ptf_variance <- t(as.matrix(optimal_weights)) %*% 
     as.matrix(cov(testing_data[,-1])) %*% 
     as.matrix(optimal_weights)
   ptf_sd <- sqrt(ptf_variance)*sqrt(multiplicator)
 
   SR <- ((mean(period_returns$returns)-rf_sr)/ptf_sd)*
-    sqrt(freq)*
-    sqrt(multiplicator)
+    sqrt(freq)
   # results <- period_returns
   results = list(period_returns, ptf_sd, SR, optimal_weights)
 }

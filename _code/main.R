@@ -58,7 +58,7 @@ factors <- rio::import(
 # ------------------------------------------------------------------------------
 #                 DEFINE PARAMETERS, SETTINGS
 # ------------------------------------------------------------------------------
-training_period <- 184    # months
+training_period <- 184   # months
 rolling_period <- 6         # months
 n <- dim(ff100_data$monthly)[2]
 k <- dim(ff100_data$monthly)[1]
@@ -71,6 +71,7 @@ cov_est_method = c(
   "cov1Para", 
   "cov2Para", 
   "covCor", 
+  "CCM",
   "covDiag", 
   "covMarket",
   "gis",
@@ -142,6 +143,7 @@ ggplot(
     returns = all_avg_returns, 
     sd = all_avg_sd
   ) %>% add_row(method = "daily_sample", returns = 0.924, sd = 2.65) %>% 
+    add_row(method = "sample_short_constraint", returns = 0.933, sd = 3.87) %>% 
   filter(!method %in% "CovMcd"),
   aes(x = sd, y = returns)) +
   geom_point() +
@@ -156,7 +158,7 @@ ggplot(
   # xlim(c(11,24)) +
   ggtitle("Tangent portfolios with various covariance matrix estimation methods")
 
-all_avg_sr <- lapply(method_order$cov_est_method, function(cov) 
+  all_avg_sr <- lapply(method_order$cov_est_method, function(cov) 
   results_by_cov[[cov]] %>% 
     map_depth(1,3) %>% 
     reduce(append) %>% 
@@ -196,6 +198,29 @@ all_weights %>%
   facet_wrap(~method, scales = "free", ncol = 1) +
   theme_hsg()
 
+all_weights %>% 
+  dplyr::group_by(method) %>% 
+  dplyr::summarise(
+            sd = sd(value),
+            median = median(value),
+            min = min(value),
+            max = max(value),
+            q5 = quantile(value, probs = 0.05),
+            q25 = quantile(value, probs = 0.25),
+            q75 = quantile(value, probs = 0.75), 
+            q95 = quantile(value, probs = 0.95)
+            )
+
+test_weights <- all_weights %>% 
+  group_by(date)
+
+test_weights <- all_weights %>% 
+  filter(name == "ME1 BM4") %>% .[,"value"]
+
+diff(test_weights$value) %>% 
+  abs %>% 
+  sum
+
 test_daily <- lapply(
   roll,
   get_portfolio_metrics,
@@ -211,13 +236,13 @@ test_daily %>%
   map_depth(1,1) %>%
   reduce(rbind) %>% 
   filter(!is.na(returns)) %>% 
-  dplyr::summarise(mean = mean(returns)*21)
+  dplyr::summarise(mean = mean(returns))
 
 test_daily %>%  
   map_depth(1,2) %>%
   reduce(rbind) %>% 
   na.omit() %>% 
-  mean()*sqrt(21)
+  mean()
 
 test_daily %>%  
   map_depth(1,3) %>%
@@ -225,8 +250,29 @@ test_daily %>%
   na.omit() %>% 
   mean()
 
-  
-  
+test_short_restriction <- lapply(
+  roll, 
+  get_portfolio_metrics,
+  stock_returns = ff100_data$monthly,
+  cov_est_method = "sample",
+  portfolio_optimization = "tangent",
+  short = FALSE,
+  frequency = "monthly",
+  factor_returns = NULL
+  )
+
+ret <- test_short_restriction %>% 
+  map_depth(1,1) %>% 
+  do.call(rbind,.) 
+
+mean(ret$returns %>% na.omit)
+
+sd <- test_short_restriction %>% 
+  map_depth(1,2) %>% 
+  do.call(rbind,.) %>% 
+  na.omit %>% 
+  mean
+
 
 # ------------------------------------------------------------------------------
 #                 BOOTSTRAPPED PORTFOLIO DATA
