@@ -28,6 +28,7 @@ names(ff100_data) <- c("monthly", "daily")
 
 # get 10-year Treasury notes and S&P500 data monthly and daily
 tickers <- c("^TNX","^GSPC")
+
 getSymbols(
   tickers, 
   from = from_date, 
