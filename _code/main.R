@@ -7,8 +7,8 @@ source("preamble.R")
 # define paths 
 core_path <- "/Users/pro/Library/Mobile Documents/com~apple~CloudDocs"
 data_path <- "masters_thesis/data"
-from_date <- as.Date("1958-02-01")
-to_date <- as.Date("2018-02-01")
+from_date <- as.Date("1970-01-01")
+to_date <- as.Date("2019-12-01")
 
 # ------------------------------------------------------------------------------
 #                 LOAD DATA
@@ -59,7 +59,7 @@ factors <- rio::import(
 # ------------------------------------------------------------------------------
 #                 DEFINE PARAMETERS, SETTINGS
 # ------------------------------------------------------------------------------
-training_period <- 184   # months
+training_period <- 60   # months
 rolling_period <- 6         # months
 n <- dim(ff100_data$monthly)[2]
 k <- dim(ff100_data$monthly)[1]
@@ -75,22 +75,20 @@ cov_est_method = c(
   "CCM",
   "covDiag", 
   "covMarket",
-  "gis",
-  "qis", 
-  "lis",
-  # "CovMve", 
-  "CovMcd",
+  # "gis",
+  "qis",
+  # "lis",
+  # "CovMve",
+  # "CovMcd",
   "huge_glasso",
   "equal_weights",
-  # "oracle", 
-  # "pca",
   "factor1",
-  "factor3",
-  "sample"
+  "factor3"
+  # "RMT",
+  # "sample"
 )
 
 roll <- seq(1, k - training_period, rolling_period)
-
 # ------------------------------------------------------------------------------
 #                 HISTORICAL DATA - COMPUTE PORTFOLIOS
 # ------------------------------------------------------------------------------
@@ -143,9 +141,8 @@ ggplot(
     method = method_order$cov_est_method, 
     returns = all_avg_returns, 
     sd = all_avg_sd
-  ) %>% add_row(method = "daily_sample", returns = 0.924, sd = 2.65) %>% 
-    add_row(method = "sample_short_constraint", returns = 0.933, sd = 3.87) %>% 
-  filter(!method %in% "CovMcd"),
+  ) %>% 
+  filter(!method %in% c("CovMve")),
   aes(x = sd, y = returns)) +
   geom_point() +
   geom_label_repel(
@@ -159,7 +156,7 @@ ggplot(
   # xlim(c(11,24)) +
   ggtitle("Tangent portfolios with various covariance matrix estimation methods")
 
-  all_avg_sr <- lapply(method_order$cov_est_method, function(cov) 
+all_avg_sr <- lapply(method_order$cov_est_method, function(cov) 
   results_by_cov[[cov]] %>% 
     map_depth(1,3) %>% 
     reduce(append) %>% 
@@ -167,11 +164,11 @@ ggplot(
     mean) %>% 
   reduce(append)
 
-data.frame(
+results_data <- data.frame(
   method_order$cov_est_method, 
   all_avg_returns, 
   all_avg_sd, all_avg_sr
-  ) %>% 
+  ) %>% mutate(sr_computed = all_avg_returns/all_avg_sd) %>% 
   dplyr::arrange(-all_avg_sr)
 
 all_weights <- lapply(method_order$cov_est_method, function(cov) 
@@ -181,8 +178,8 @@ all_weights <- lapply(method_order$cov_est_method, function(cov)
     t %>% 
     as_tibble %>% 
     mutate(date = seq.Date(
-      from = as.Date("1973-06-01"), 
-      to = as.Date("2018-03-01"), 
+      from = from_date + months(training_period), 
+      to = to_date, 
       by = "6 month"
     )
     ) %>% 
@@ -226,30 +223,45 @@ test_daily <- lapply(
   roll,
   get_portfolio_metrics,
   stock_returns = ff100_data$daily,
-  cov_est_method = "cov1Para",
+  cov_est_method = "sample",
   portfolio_optimization = "tangent",
   short = TRUE,
   frequency = "daily",
   factor_returns  = NULL
 )
 
-test_daily %>%  
+ret_d <- test_daily %>%  
   map_depth(1,1) %>%
   reduce(rbind) %>% 
   filter(!is.na(returns)) %>% 
   dplyr::summarise(mean = mean(returns))
 
-test_daily %>%  
+sd_d <- test_daily %>%  
   map_depth(1,2) %>%
   reduce(rbind) %>% 
   na.omit() %>% 
   mean()
 
-test_daily %>%  
+sr_d <- test_daily %>%  
   map_depth(1,3) %>%
   reduce(rbind) %>% 
   na.omit() %>% 
   mean()
+
+sample_daily_weights <- test_daily %>% 
+  map_depth(1,4) %>% 
+  reduce(cbind) %>% 
+  t %>% 
+  as_tibble %>% 
+  mutate(date = seq.Date(
+    from = from_date + months(training_period), 
+    to = to_date, 
+    by = "6 month"
+  )
+  ) %>% 
+  dplyr::select(date, everything()) %>% 
+  pivot_longer(!date) %>% 
+  mutate(method = "daily_sample")
 
 test_short_restriction <- lapply(
   roll, 
@@ -266,15 +278,34 @@ ret <- test_short_restriction %>%
   map_depth(1,1) %>% 
   do.call(rbind,.) 
 
-mean(ret$returns %>% na.omit)
+ret_short <- mean(ret$returns %>% na.omit)
 
-sd <- test_short_restriction %>% 
+sd_short <- test_short_restriction %>% 
   map_depth(1,2) %>% 
   do.call(rbind,.) %>% 
   na.omit %>% 
   mean
 
+sr_short <- test_short_restriction %>%  
+  map_depth(1,3) %>%
+  reduce(rbind) %>% 
+  na.omit() %>% 
+  mean()
 
+short_restriction_weights <- test_short_restriction %>% 
+  map_depth(1,4) %>% 
+  reduce(cbind) %>% 
+  t %>% 
+  as_tibble %>% 
+  mutate(date = seq.Date(
+    from = from_date + months(training_period), 
+    to = to_date, 
+    by = "6 month"
+  )
+  ) %>% 
+  dplyr::select(date, everything()) %>% 
+  pivot_longer(!date) %>% 
+  mutate(method = "sample_short_constraint")
 # ------------------------------------------------------------------------------
 #                 BOOTSTRAPPED PORTFOLIO DATA
 # ------------------------------------------------------------------------------

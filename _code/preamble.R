@@ -46,6 +46,9 @@ conflict_prefer("first", "dplyr")
 conflicts_prefer(dplyr::last)
 conflicts_prefer(plyr::mutate)
 
+# set seed for reproducibility
+set.seed(12345)
+
 # load own functions
 # load Ledoit-Wolf functions
 

@@ -96,7 +96,9 @@ get_portfolio_metrics <- function (
         # Additional constraint: no short selling
         meq <- 1  # Constraint: weights sum to 1
         # Solve the quadratic programming problem
-        optimal_weights <- solve.QP(Dmat, dvec, Amat, bvec, meq = meq)$solution
+        optimal_weights <- solve.QP(Dmat, dvec, Amat, bvec, meq = meq)$
+          solution %>% as.matrix
+        rownames(optimal_weights) <- names(excess_er_hat)
       }
     } else if (portfolio_optimization == "minvar") {
       # minvar portfolio from Markowitz formula
@@ -115,7 +117,7 @@ get_portfolio_metrics <- function (
   ptf_sd <- sqrt(ptf_variance)*sqrt(multiplicator)
 
   SR <- ((mean(period_returns$returns)-rf_sr)/ptf_sd)*
-    sqrt(freq)
+    sqrt(12)
   # results <- period_returns
   results = list(period_returns, ptf_sd, SR, optimal_weights)
 }
