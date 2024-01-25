@@ -58,11 +58,9 @@ get_portfolio_metrics <- function (
   ]
   date_test <- testing_data[,1]
   
-  # rf_sr <- window(TNX,
-  #                 start = first(date_test),
-  #                 end = last(date_test))$TNX.Adjusted %>%
-  #   # get average monthly rate, percentage to decimal
-  #   mean(na.rm = T)/freq
+  rf_sr <- TNX$TNX.Adjusted %>%
+    # get average monthly rate, percentage to decimal
+    mean(na.rm = T)/freq
   # covariance estimation
   ## linear shrinkage 
   
@@ -110,14 +108,13 @@ get_portfolio_metrics <- function (
   }
   period_returns <- rowSums(testing_data[,-1]*optimal_weights) %>% 
     tibble(date=date_test, returns = .) %>% 
-    mutate(returns = returns*multiplicator)
+    mutate(returns = returns)
   ptf_variance <- t(as.matrix(optimal_weights)) %*% 
     as.matrix(cov(testing_data[,-1])) %*% 
     as.matrix(optimal_weights)
-  ptf_sd <- sqrt(ptf_variance)*sqrt(multiplicator)
+  ptf_sd <- sqrt(ptf_variance)
 
-  SR <- ((mean(period_returns$returns)-rf_sr)/ptf_sd)*
-    sqrt(12)
+  SR <- ((mean(period_returns$returns)-rf_sr)/ptf_sd)
   # results <- period_returns
   results = list(period_returns, ptf_sd, SR, optimal_weights)
 }

@@ -56,13 +56,30 @@ factors <- rio::import(
   dplyr::select(-RF) %>% 
   rename(date = V1)
 
+factors_daily <- rio::import(
+  file.path(core_path,data_path, "F-F_Research_Data_Factors_daily.CSV")
+) %>% 
+  mutate(date = as.Date(date, 
+    format = "%Y%m%d")) %>% 
+  dplyr::filter(date > from_date & date < to_date) %>% 
+  dplyr::select(-RF) 
+
 # ------------------------------------------------------------------------------
 #                 DEFINE PARAMETERS, SETTINGS
 # ------------------------------------------------------------------------------
-training_period <- 60   # months
+training_period <- 12  # months
 rolling_period <- 6         # months
 n <- dim(ff100_data$monthly)[2]
 k <- dim(ff100_data$monthly)[1]
+frequency <- "daily" # "monthly"
+
+if(frequency == "daily"){
+  assets_returns <- ff100_data$daily
+  factors_returns <- factors_daily 
+}else if(frequency == "monthly"){
+  assets_returns <- ff100_data$monthly
+  factors_returns <- factors
+}
 
 # rules: 
 # lis: n_obs > n_var
@@ -75,17 +92,17 @@ cov_est_method = c(
   "CCM",
   "covDiag", 
   "covMarket",
-  # "gis",
+  "gis",
   "qis",
-  # "lis",
-  # "CovMve",
-  # "CovMcd",
-  "huge_glasso",
+  "lis",
+  "CovMve",
+  "CovMcd",
+  # "huge_glasso",
   "equal_weights",
   "factor1",
-  "factor3"
-  # "RMT",
-  # "sample"
+  "factor3",
+  "RMT",
+  "sample"
 )
 
 roll <- seq(1, k - training_period, rolling_period)
@@ -96,10 +113,11 @@ roll <- seq(1, k - training_period, rolling_period)
 test_rolling_cov_method <- pmap(
   crossing(cov_est_method, roll),
   get_portfolio_metrics, 
-  stock_returns = ff100_data$monthly,
+  stock_returns = assets_returns,
   portfolio_optimization = "tangent",
   short = TRUE, 
-  factor_returns = factors
+  frequency = frequency, 
+  factor_returns = factors_returns
 )
 method_order <- crossing(cov_est_method, roll) %>% 
   dplyr::select(cov_est_method) %>% 
@@ -125,6 +143,16 @@ all_avg_returns <- lapply(method_order$cov_est_method, function(cov)
     filter(!is.na(returns)) %>% 
     dplyr::summarise(mean = mean(returns))
   ) %>% 
+  unlist %>% 
+  reduce(append)
+
+all_sd <- lapply(method_order$cov_est_method, function(cov) 
+  results_by_cov[[cov]] %>% 
+    map_depth(1,1) %>%
+    reduce(rbind) %>% 
+    filter(!is.na(returns)) %>% 
+    dplyr::summarise(sd = sd(returns))
+) %>% 
   unlist %>% 
   reduce(append)
 
@@ -163,13 +191,6 @@ all_avg_sr <- lapply(method_order$cov_est_method, function(cov)
     na.omit %>% 
     mean) %>% 
   reduce(append)
-
-results_data <- data.frame(
-  method_order$cov_est_method, 
-  all_avg_returns, 
-  all_avg_sd, all_avg_sr
-  ) %>% mutate(sr_computed = all_avg_returns/all_avg_sd) %>% 
-  dplyr::arrange(-all_avg_sr)
 
 all_weights <- lapply(method_order$cov_est_method, function(cov) 
   data <- results_by_cov[[cov]] %>% 
@@ -242,6 +263,12 @@ sd_d <- test_daily %>%
   na.omit() %>% 
   mean()
 
+sd_ret_d <- test_daily %>%  
+  map_depth(1,1) %>%
+  reduce(rbind) %>% 
+  filter(!is.na(returns)) %>% 
+  dplyr::summarise(sd = sd(returns))
+
 sr_d <- test_daily %>%  
   map_depth(1,3) %>%
   reduce(rbind) %>% 
@@ -266,11 +293,11 @@ sample_daily_weights <- test_daily %>%
 test_short_restriction <- lapply(
   roll, 
   get_portfolio_metrics,
-  stock_returns = ff100_data$monthly,
+  stock_returns = assets_returns,
   cov_est_method = "sample",
   portfolio_optimization = "tangent",
   short = FALSE,
-  frequency = "monthly",
+  frequency = frequency,
   factor_returns = NULL
   )
 
@@ -279,6 +306,8 @@ ret <- test_short_restriction %>%
   do.call(rbind,.) 
 
 ret_short <- mean(ret$returns %>% na.omit)
+
+sd_ret_short <- sd(ret$returns %>% na.omit)
 
 sd_short <- test_short_restriction %>% 
   map_depth(1,2) %>% 
@@ -306,22 +335,70 @@ short_restriction_weights <- test_short_restriction %>%
   dplyr::select(date, everything()) %>% 
   pivot_longer(!date) %>% 
   mutate(method = "sample_short_constraint")
+
+# annual statistics for SP500
+stat_sp500 <- GSPC$GSPC.Adjusted %>% fortify.zoo() %>% 
+  filter(Index > from_date+months(training_period)&
+           Index < to_date) %>% 
+  mutate(returns = diff(GSPC.Adjusted)/lag(GSPC.Adjusted)) %>% 
+  dplyr::summarise(mean = (mean(returns)*252*100),
+                   sd = (sd(returns)*sqrt(252))*100,
+                   sr = (mean(returns)*252*100-0.5)/((sd(returns)*sqrt(252))*100))
+
+if(frequency == "daily"){
+  to_annual <- 252
+}else if(frequency == "monthly"){
+  to_annual <- 12
+}
+
+results_data <- data.frame(
+  method = method_order$cov_est_method, 
+  mu = all_avg_returns*to_annual,
+  sd_window = all_avg_sd*sqrt(to_annual), 
+  sr_window = all_avg_sr*sqrt(to_annual), 
+  sd_overall = all_sd*sqrt(to_annual)
+) %>%  add_row(
+  method = "daily_sample", 
+  mu = ret_d$mean*252, 
+  sd_window = sd_d*sqrt(252), 
+  sr_window = sr_d*sqrt(252),
+  sd_overall = sd_ret_short*sqrt(252)
+) %>% 
+  add_row(
+    method = "sample_short_constraint", 
+    mu = ret_short*to_annual, 
+    sd_window = sd_short*sqrt(to_annual),
+    sr_window = sr_short*sqrt(to_annual),
+    sd_overall = sd_ret_short*sqrt(to_annual)
+  ) %>% mutate(sr_overall = (mu-6)/sd_overall) %>% 
+  add_row(
+    method = "SP500", 
+    mu = stat_sp500$mean, 
+    sd_overall = stat_sp500$sd,
+    sr_overall = stat_sp500$sr
+  )
+ 
 # ------------------------------------------------------------------------------
 #                 BOOTSTRAPPED PORTFOLIO DATA
 # ------------------------------------------------------------------------------
-n_bootstraps <- 10
+n_bootstraps <- 300
 
 df_all <- lapply(cov_est_method, 
        bootstrap_cov_estimates, 
        roll=roll, 
-       n_bootstraps=n_bootstraps) %>% 
+       n_bootstraps=n_bootstraps,
+       data = ff100_data$daily,
+       frequency = frequency,
+       factor_returns = factors_daily) %>% 
   reduce(rbind)
 
 #getting the convex hull of each unique point set
 
 load(file.path(core_path, data_path, "bootstrap_cov.RData"))
 
-df_all_bis <- df_all %>% filter(returns < 500, sd < 500)
+df_all_bis <- df_all %>% 
+  mutate(returns = returns*252,
+         sd=sd*sqrt(252))
 
 hulls <- ddply(df_all_bis,"method", find_hull)
 
@@ -331,7 +408,7 @@ ggplot(data = df_all_bis,
   geom_polygon(data = hulls, alpha = 0.5) +
   labs(x = "sd", y = "returns")
 
-save(df_all, file = file.path(core_path, data_path, "bootstrap_cov.Rdata"))
+# save(df_all, file = file.path(core_path, data_path, "bootstrap_cov.Rdata"))
 
 test_daily <- pmap(
   tibble(data = ff100_data, frequency = c("monthly", "daily")),

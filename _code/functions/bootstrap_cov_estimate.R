@@ -3,9 +3,11 @@ bootstrap_cov_estimates <- function(
     n_bootstraps,
     cov_est_method,
     data = ff100_data$monthly,
-    frequency = "monthly"
+    frequency = "monthly", 
+    factor_returns
     ) {
   stock_returns <- bootstrapped_portfolios(data, n_bootstraps)
+  factors <- bootstrapped_portfolios(factor_returns %>% rename(Date=date),1)
   
   test_rolling_bootstrap <- pmap(
     crossing(stock_returns, roll),
@@ -13,7 +15,7 @@ bootstrap_cov_estimates <- function(
     cov_est_method = cov_est_method,
     portfolio_optimization = "tangent",
     short = TRUE, 
-    factor_returns = factors,
+    factor_returns = factors[[1]],
     frequency = frequency
   )
   

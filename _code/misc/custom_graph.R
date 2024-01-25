@@ -42,7 +42,23 @@ main_plot2 +
     ymin = -0.1, ymax = 0.55
   ) 
 
+ret_test <- lapply(method_order$cov_est_method, function(cov) 
+  results_by_cov[[cov]] %>% 
+    map_depth(1,1) %>%
+    reduce(rbind) %>% 
+    filter(!is.na(returns))
+) 
 
+ret_test[[16]] %>% 
+  ggplot(aes(x=date,y=returns)) +
+  geom_line()
+
+ret_test[[9]]$returns %>% mean()*12
+
+a <- ret_test[[9]] %>% mutate(returns=returns*12)
+a$returns %>% sd  
+
+ret_test[[9]] %>% view()
 
 
 
