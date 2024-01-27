@@ -32,10 +32,7 @@ get_covariance_estimate <- function(
     sigma_hat = lis(Y = data)
   } else if (method == "qis") {
     sigma_hat = qis(Y = data)
-  } else if (method == "oracle") {
-    # Calculate the Oracle covariance estimator
-    sigma_hat <- CovTools::CovEst.2010OAS(data)$S
-  } else if (method == "CovMcd") {
+  }  else if (method == "CovMcd") {
     sigma_hat = rrcov::CovMcd(data)$cov
   } else if (method == "CovMve") {
     sigma_hat = rrcov::CovMve(data)$cov
@@ -54,42 +51,11 @@ get_covariance_estimate <- function(
       criterion = "ric"
     )
     sigma_hat <- select_out$opt.cov
-  } else if (method == "pca") {
-    # Perform PCA using princomp
-    pca_results <- prcomp(
-      cov(
-        data
-      )
-    )
-    principal_components <- pca_results$rotation
-    eigenvalues <- pca_results$sdev^2
-    
-    # Now 'estimated_cov_matrix' contains the estimated covariance matrix
-    cumulative_variance <- cumsum(eigenvalues) / sum(eigenvalues)
-    # choose above 0.95
-    opt_num_comp <- data.frame(
-      num_comp = 1:length(cumulative_variance),
-      cumulative_variance
-    ) %>% 
-      filter(cumulative_variance > 0.95) %>% 
-      .[1,1]
-    
-    # Select the first 'num_components' principal components
-    selected_components <- principal_components[, 1:opt_num_comp]
-    
-    # Select the first 'num_components' eigenvalues
-    selected_eigenvalues <- eigenvalues[1:opt_num_comp]
-    
-    # Estimate the covariance matrix using selected components and eigenvalues
-    sigma_hat <- selected_components %*% 
-      diag(selected_eigenvalues) %*% 
-      t(selected_components)
-    
-  } else if (method %in% c("factor1", "factor3")) {
+  }  else if (method %in% c("factor1", "factor3")) {
     factor_data <- factor_data 
     if(method == "factor1"){
       # 1-factor model (market)
-      F_ <- cbind(ones = 1, factor_data[,1])
+      F_ <- cbind(ones = 1, factor_data[,1]) %>%  as.matrix
     } else if(method == "factor3"){
       # 3-factors model (market, HML, SMB)
       F_ <- cbind(ones = 1, factor_data) %>% as.matrix
@@ -117,7 +83,8 @@ get_covariance_estimate <- function(
   } else if (method == "RMT") {
     sigma_hat <- covmat::estRMT(data)$cov
   } else if (method == "sample") {
-    sigma_hat <- (t(as.matrix(data)) %*% as.matrix(data)) / (dim(data)[1]-1)   
+    sigma_hat <- (t(as.matrix(data)) %*% as.matrix(data)) / (dim(data)[1]-1)
+    # sigma_hat <- cov(data, method = "kendall")
   } 
   return(sigma_hat) 
 }

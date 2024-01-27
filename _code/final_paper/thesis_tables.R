@@ -41,10 +41,88 @@ res_thesis <- results_rdata$m180$results %>%
 res_thesis %>% stargazer::stargazer(summary=F, rownames = F)
 
 # ------------------------------------------------------------------------------
+#                CUMMULATIVE RETURN 
+# ------------------------------------------------------------------------------
+# test_rolling_cov_method <- results_rdata$d504$complete_results
+
+method_order <- crossing(cov_est_method, roll) %>% 
+  dplyr::select(cov_est_method) %>% 
+  unique()
+
+names(test_rolling_cov_method) <- rep(
+  method_order$cov_est_method, 
+  each=length(roll)
+)
+
+results_by_cov <- lapply(
+  seq(1,(length(method_order$cov_est_method)-1)*length(roll)+1, length(roll)), 
+  function(x) 
+    test_rolling_cov_method[x:(x+length(roll)-1)]
+)
+
+names(results_by_cov) <- method_order$cov_est_method
+
+returns <- lapply(method_order$cov_est_method, function(cov) 
+  results_by_cov[[cov]] %>% 
+    map_depth(1,1) %>%
+    reduce(rbind) %>% 
+    filter(!is.na(returns)) 
+) 
+
+# Calculate price-like index
+prices <- lapply(returns, function(cov){
+  log_returns <- log(1 + cov[,2]/100)
+  cumulative_log_returns <- cumsum(log_returns)
+  initial_price <- 1  # example initial price
+  total_price_evolution <- initial_price * exp(cumulative_log_returns)
+}) %>% reduce(cbind) 
+colnames(prices) <- method_order$cov_est_method
+dates <- returns[[1]][,1]
+prices$date <- dates$date
+
+plot <- prices %>% pivot_longer(!date) %>% 
+  # filter(name =="sample") %>% 
+  ggplot(aes(x=date, y=value,color=name)) +
+  geom_line()
+
+plotly::ggplotly(plot)
+
+
+
+# ------------------------------------------------------------------------------
+#                 HERFINDHAL INDEX
+# ------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+#                 MAXIMUM DRAWDOWN
+# ------------------------------------------------------------------------------
+
+max_drawdown <- lapply(method_order$cov_est_method, function(cov){
+  # Calculate the running maximum
+  running_max <- cummax(prices[,cov])
+  # Calculate drawdowns
+  drawdowns <- (running_max - prices[,cov]) / running_max
+  # Find the maximum drawdown
+  max_drawdown <- max(drawdowns)
+  date_max <- prices$date[which(drawdowns == max(drawdowns))]
+  return(data.frame(maxdraw = max_drawdown, date_max_draw = date_max))
+}) %>% reduce(rbind) %>% mutate(method = method_order$cov_est_method)
+
+
+ret_vec <- returns[[2]][,-1]
+
+returns[[1]][9918,]
+
+
+library(fTrading)
+
+maxDrawDown(cumsum(ret_vec$returns/100))
+
+# ------------------------------------------------------------------------------
 #                 WEIGHTS DISTRIBUTION
 # ------------------------------------------------------------------------------
 
-results_rdata$m240$weights %>% 
+results_rdata$d252$weights %>% 
   dplyr::group_by(method) %>% 
   dplyr::summarise(
     sd = sd(value),
@@ -57,8 +135,41 @@ results_rdata$m240$weights %>%
     q95 = quantile(value, probs = 0.95)
   )
 
-mad_ew <- results_rdata$d504$weights %>% 
-  # filter(method == "CCM") %>% 
+# ------------------------------------------------------------------------------
+#                 GLOBAL TURNOVER RATE
+# ------------------------------------------------------------------------------
+gtr_504d <- lapply(results_rdata$d504$weights$method %>% unique, 
+       get_global_turnover,
+       weights = results_rdata$d504$weights, 
+       stock_returns = ff100_data$daily, 
+       frequency_day_month = "day") %>% 
+  suppressMessages %>% 
+  suppressWarnings %>% 
+  reduce(append) %>%  
+  data.frame(method = results_rdata$d504$weights$method %>% unique,
+                                    gtr = .) %>% 
+  mutate(gtr = 100*gtr)
+
+gtr_252d <- lapply(results_rdata$d252$weights$method %>% unique, 
+                   get_global_turnover,
+                   weights = results_rdata$d252$weights, 
+                   stock_returns = ff100_data$daily, 
+                   frequency_day_month = "day") %>% 
+  suppressMessages %>% 
+  suppressWarnings %>%   
+  reduce(append)   %>%  
+  data.frame(method = results_rdata$d252$weights$method %>% unique,
+             gtr = .) %>% 
+  mutate(gtr = 100*gtr)
+
+# ------------------------------------------------------------------------------
+#                 SHORT SHARE OF THE PORTFOLO
+# ------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+#                 MEAN ABSOLUTE DEVIATION
+# ------------------------------------------------------------------------------
+mad_ew_504d <- results_rdata$d504$weights %>% 
   group_by(date, method) %>% 
   dplyr::summarise(MAD = mean(abs(value - 1/n()))) %>% 
   ungroup() %>%
@@ -66,43 +177,13 @@ mad_ew <- results_rdata$d504$weights %>%
   dplyr::summarise(mean_mad = mean(MAD)*100) %>% 
   ungroup
 
-get_global_turnover(weights = results_rdata$d504$weights, 
-                    stock_returns = ff100_data$daily, 
-                    frequency_day_month = "day", 
-                    method_cov = "sample")
-
-
-gtr_504d <- lapply("sample", 
-       get_global_turnover,
-       weights = results_rdata$d504$weights, 
-       stock_returns = ff100_data$daily, 
-       frequency_day_month = "day") %>% 
-  reduce(append)
-
-results_rdata$d252$weights$method %>% unique
-gtr_252d <- lapply("sample", 
-                   get_global_turnover,
-                   weights = results_rdata$d252$weights, 
-                   stock_returns = ff100_data$daily, 
-                   frequency_day_month = "day") %>% 
-  reduce(append)
-
-
-test_tr <- results_rdata$d252$weights %>% 
-  filter(method == "sample") %>% 
-  select(-method) %>% 
-  group_by(name) %>% 
-  dplyr::summarise(lagged_value = abs(diff(value)), date = date[-1]) %>% 
-  ungroup() %>% 
-  group_by(date) %>% 
-  dplyr::summarise(sum(lagged_value))
-
-test_tr$`sum(lagged_value)` %>% mean(na.rm = T)
-
-# ------------------------------------------------------------------------------
-#                 MEAN ABSOLUTE DEVIATION
-# ------------------------------------------------------------------------------
-
+mad_ew_252 <- results_rdata$d252$weights %>% 
+  group_by(date, method) %>% 
+  dplyr::summarise(MAD = mean(abs(value - 1/n()))) %>% 
+  ungroup() %>%
+  group_by(method) %>% 
+  dplyr::summarise(mean_mad = mean(MAD)*100) %>% 
+  ungroup
 
 
 # ##############################################################################

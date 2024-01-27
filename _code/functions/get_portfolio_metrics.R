@@ -28,24 +28,24 @@ get_portfolio_metrics <- function (
     multiplicator <- 21
   }
   training_data <- stock_returns[
-    (roll*multiplicator):(training_period*multiplicator+roll*multiplicator-1),
+    (roll):(training_period+roll-1),
     -1
   ]
   training_date <- stock_returns[
-    (roll*multiplicator):(training_period*multiplicator+roll*multiplicator-1),
+    (roll):(training_period+roll-1),
     1
   ]
-    # rf <- window(TNX,
-    #            start = first(training_date),
-    #            end = last(training_date))$TNX.Adjusted %>%
-    # # get average monthly rate, percentage to decimal
-    # mean(na.rm = T)/freq
+  # rf <- window(TNX,
+  #            start = first(training_date),
+  #            end = last(training_date))$TNX.Adjusted %>%
+  # # get average monthly rate, percentage to decimal
+  # mean(na.rm = T)/freq
   
-  rf <- 0.42
+  rf <- 0.5
   
   if(cov_est_method %in% c("factor1", "factor3")){
     training_factor_data <- factor_returns[
-      (roll*multiplicator):(training_period*multiplicator+roll*multiplicator-1),
+      (roll):(training_period+roll-1),
       -1
     ]
   } else {
@@ -53,8 +53,8 @@ get_portfolio_metrics <- function (
   }
   
   testing_data <- stock_returns[
-    ((training_period+roll)*multiplicator):
-      (((training_period+roll+rolling_period)*multiplicator)-1),
+    ((training_period+roll)):
+      (((training_period+roll+rolling_period))-1),
   ]
   date_test <- testing_data[,1]
   
@@ -64,8 +64,6 @@ get_portfolio_metrics <- function (
   # covariance estimation
   ## linear shrinkage 
   
-  rf_sr <- 0.5/multiplicator
-    
   if (!cov_est_method == "equal_weights") {
     sigma_hat = get_covariance_estimate(
       method = cov_est_method,
@@ -81,7 +79,7 @@ get_portfolio_metrics <- function (
     if (portfolio_optimization == "tangent") {
       # tangent portfolio from Markowitz formula
       excess_er_hat <- colMeans(training_data - rf) 
-
+      
       optimal_weights <- (inverse_sigma_hat %*% excess_er_hat)/
         sum(inverse_sigma_hat %*% excess_er_hat)
       if (short == FALSE) {
@@ -113,7 +111,7 @@ get_portfolio_metrics <- function (
     as.matrix(cov(testing_data[,-1])) %*% 
     as.matrix(optimal_weights)
   ptf_sd <- sqrt(ptf_variance)
-
+  
   SR <- ((mean(period_returns$returns)-rf_sr)/ptf_sd)
   # results <- period_returns
   results = list(period_returns, ptf_sd, SR, optimal_weights)

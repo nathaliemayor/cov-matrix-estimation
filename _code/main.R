@@ -17,7 +17,7 @@ to_date <- as.Date("2019-12-01")
 data_files_names <- c(
   "100_Portfolios_10x10_Wout_Div.CSV", 
   "100_Portfolios_10x10_Daily.CSV"
-  )
+)
 
 ff100_data <- lapply(
   data_files_names, 
@@ -60,17 +60,18 @@ factors_daily <- rio::import(
   file.path(core_path,data_path, "F-F_Research_Data_Factors_daily.CSV")
 ) %>% 
   mutate(date = as.Date(date, 
-    format = "%Y%m%d")) %>% 
+                        format = "%Y%m%d")) %>% 
   dplyr::filter(date > from_date & date < to_date) %>% 
   dplyr::select(-RF) 
 
 # ------------------------------------------------------------------------------
 #                 DEFINE PARAMETERS, SETTINGS
 # ------------------------------------------------------------------------------
-training_period <- 12  # months
-rolling_period <- 6         # months
-n <- dim(ff100_data$monthly)[2]
-k <- dim(ff100_data$monthly)[1]
+ff100_data$daily <- ff100_data$daily
+training_period <- 252*5 # obs
+rolling_period <- 21   # obs
+n <- dim(ff100_data$daily)[2]
+k <- dim(ff100_data$daily)[1]
 frequency <- "daily" # "monthly"
 
 if(frequency == "daily"){
@@ -97,7 +98,7 @@ cov_est_method = c(
   "lis",
   "CovMve",
   "CovMcd",
-  # "huge_glasso",
+  "huge_glasso",
   "equal_weights",
   "factor1",
   "factor3",
@@ -109,15 +110,15 @@ roll <- seq(1, k - training_period, rolling_period)
 # ------------------------------------------------------------------------------
 #                 HISTORICAL DATA - COMPUTE PORTFOLIOS
 # ------------------------------------------------------------------------------
-# cov_est_method <- "sample"
+# cov_est_method <- "CCM"
 test_rolling_cov_method <- pmap(
   crossing(cov_est_method, roll),
   get_portfolio_metrics, 
-  stock_returns = assets_returns,
+  stock_returns = ff100_data$daily,
   portfolio_optimization = "tangent",
   short = TRUE, 
   frequency = frequency, 
-  factor_returns = factors_returns
+  factor_returns = factors_daily
 )
 method_order <- crossing(cov_est_method, roll) %>% 
   dplyr::select(cov_est_method) %>% 
@@ -381,8 +382,28 @@ results_data <- data.frame(
 # ------------------------------------------------------------------------------
 #                 BOOTSTRAPPED PORTFOLIO DATA
 # ------------------------------------------------------------------------------
-n_bootstraps <- 300
+library(foreach)
+library(doParallel)
+registerDoParallel(cores = 4)
+tictoc::tic()
+n_bootstraps <- 1000
+cov_est_method <- "factor1"
+df_all <- foreach(cov_method = cov_est_method, .combine = rbind) %dopar% {
+  bootstrap_cov_estimates(cov_method, 
+                          roll = roll, 
+                          n_bootstraps = n_bootstraps,
+                          data = ff100_data$daily,
+                          frequency = frequency,
+                          factor_returns = factors_daily)
+}
+stopImplicitCluster()
+tictoc::toc()
 
+bootstrap_factor1 <- df_all %>% 
+  mutate(sr = sqrt(252)*returns/sd)
+
+
+tictoc::tic()
 df_all <- lapply(cov_est_method, 
        bootstrap_cov_estimates, 
        roll=roll, 
@@ -391,10 +412,12 @@ df_all <- lapply(cov_est_method,
        frequency = frequency,
        factor_returns = factors_daily) %>% 
   reduce(rbind)
+tictoc::toc()
 
 #getting the convex hull of each unique point set
 
 load(file.path(core_path, data_path, "bootstrap_cov.RData"))
+# save(bootstrap_factor1, file = file.path(core_path, data_path, "bootstrap_factor1_1000.RData"))
 
 df_all_bis <- df_all %>% 
   mutate(returns = returns*252,

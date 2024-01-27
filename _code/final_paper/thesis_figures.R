@@ -3,67 +3,6 @@
 # ##############################################################################
 # results_rdata <- list() 
 
-# 240 MONTHS, 01-01-1970 TO 01-12-2019
-results_240 <- results_data
-all_weights_240 <- all_weights
-all_weights_240 <- all_weights_240 %>% 
-  rbind(sample_daily_weights) %>% 
-  rbind(short_restriction_weights)
-results_rdata$m240 <- list(results = results_240, 
-                           weights = all_weights_240,
-                           complete_results = test_rolling_cov_method)
-
-# 180 MONTHS, 01-01-1970 TO 01-12-2019
-results_180 <- results_data
-all_weights_180 <- all_weights
-all_weights_180 <- all_weights_180 %>% 
-  rbind(sample_daily_weights) %>% 
-  rbind(short_restriction_weights)
-results_rdata$m180 <- list(results = results_180, 
-                           weights = all_weights_180,
-                           complete_results = test_rolling_cov_method)
-
-# 120 MONTHS, 01-01-1980 TO 01-12-2019
-results_120 <- results_data
-all_weights_120 <- all_weights
-all_weights_120 <- all_weights_120 %>% 
-  rbind(sample_daily_weights) %>% 
-  rbind(short_restriction_weights)
-results_rdata$m120 <- list(results = results_120, 
-                           weights = all_weights_120,
-                           complete_results = test_rolling_cov_method)
-
-# 92 MONTHS, 01-01-1959 TO 01-12-2023
-results_92 <- results_data
-all_weights_92 <- all_weights
-results_92 <- results_92 %>% 
-  add_row(
-    method_order.cov_est_method = "daily_sample", 
-    all_avg_returns = ret_d, 
-    all_avg_sd = sd_d, 
-    all_avg_sr = sr_d
-  ) %>% 
-  add_row(
-    method_order.cov_est_method = "sample_short_constraint", 
-    all_avg_returns = ret_short, 
-    all_avg_sd = sd_short,
-    all_avg_sr = sr_short
-  )
-all_weights_92 <- all_weights_92 %>% 
-  rbind(sample_daily_weights) %>% 
-  rbind(short_restriction_weights)
-results_rdata$m92 <- list(results = results_92, weights = all_weights_92)
-
-# 60 MONTHS, 01-01-1959 TO 01-12-2023
-results_60 <- results_data
-all_weights_60 <- all_weights
-
-all_weights_60 <- all_weights_60 %>% 
-  rbind(sample_daily_weights) 
-results_rdata$m60 <- list(results = results_60, 
-                          weights = all_weights_60,
-                          complete_results = test_rolling_cov_method)
-
 # 252 DAYS, 01-01-1970 TO 01-12-2019
 results_252d <- results_data
 all_weights_252d <- all_weights

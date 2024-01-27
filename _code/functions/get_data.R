@@ -13,7 +13,7 @@ get_data <- function(
     file.path(
       path, 
       file_name
-    ), skip = 15
+    )
   ) %>% 
     suppressWarnings %>% 
     # get correct format for dates
@@ -22,7 +22,8 @@ get_data <- function(
       Date, everything(), 
       -V1
     ) %>% 
-    dplyr::filter(Date >= from_date & Date <= to_date)
+    dplyr::filter(Date >= from_date & Date <= to_date) %>% 
+    dplyr::mutate(across(-Date,~as.numeric(.)))
   # remove columns with missing data
   sum_of_col <- as.data.frame(data == -99.99) %>% 
     colSums %>% 

@@ -42,6 +42,16 @@ bootstrap_cov_estimates <- function(
     unlist %>% 
     reduce(append)
   
+  all_sd_bootstrap <- lapply(1:n_bootstraps, function(x) 
+    results_by_bootstrap[[x]] %>% 
+      map_depth(1,1) %>%
+      reduce(rbind) %>% 
+      filter(!is.na(returns)) %>% 
+      dplyr::summarise(sd = sd(returns))
+  ) %>% 
+    unlist %>% 
+    reduce(append)
+  
   all_avg_sd_bootstrap <- lapply(1:n_bootstraps, function(x) 
     results_by_bootstrap[[x]] %>% 
       map_depth(1,2) %>% 
@@ -52,6 +62,7 @@ bootstrap_cov_estimates <- function(
   
   df <- data.frame(method = cov_est_method, 
                    returns=all_avg_returns_bootstrap,
-                   sd = all_avg_sd_bootstrap)
+                   sd = all_avg_sd_bootstrap,
+                   sd_overall = all_sd_bootstrap)
   return(df)
 }
