@@ -2,9 +2,7 @@
 #                 THESIS TABLES
 # ##############################################################################
 load(file.choose())
-# results_m <- results_rdata
-# results_d <- results_rdata
-
+load(file.path(core_path,data_path,"results","results_figures_tables_1970-2019D.RData"))
 legend_setting <-  data.frame(
   method = c("cov1Para", "cov2Para", "covCor","covDiag", 
              "covMarket","gis","qis","lis",
@@ -12,29 +10,28 @@ legend_setting <-  data.frame(
              "huge_glasso",
              "CCM","factor1","factor3","RMT",
              "sample", "SP500","equal_weights",
-             "daily_sample","sample_short_constraint"),
-  estimation_method = c("LS-1P","LS-2P","LS-CCM","LS-D","LS-SIM","NS-GIS","NS-QIS","NS-LIS",
-            "MVE","MCD","GLASSO","CCM","SIM","MIM","RMT","SampleM","SP500","EQW",
-            "SampleD","W+")
+             "sample_short_constraint"),
+  label = c("LS-1P","LS-2P","LS-CCM","LS-D","LS-SIM","NS-GIS","NS-QIS","NS-LIS",
+            "MVE","MCD","GLASSO","CCM","SIM","MIM","RMT",
+            "Sample","SP500","EQW","W+"),
+  color = c("tomato3","blue","forestgreen","orange","purple","red","blue","orange","magenta3",
+            "darkblue","black","darkred","magenta","cornflowerblue","blue1","red4","cornflowerblue",
+            "black","darkorange"),
+  shape = c(19,19,19,19,19,25,25,25,15,15,10,17,17,17,17,8,8,8,8),
+  line_shape =c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2)
 )
 # ------------------------------------------------------------------------------
 #                 MAIN RESULTS TABLE
 # ------------------------------------------------------------------------------
 
-res_thesis <- results_rdata$m180$results %>% 
-  # rename(method = method_order.cov_est_method,
-  #        mean = all_avg_returns,
-  #        sd_window = all_avg_sd,
-  #        sr_window = all_avg_sr,
-  #        sd_overall = all_sd,
-  #        sr_overall = sr_computed) %>% 
+res_thesis <- results_rdata$d1260_126$results %>% 
   left_join(legend_setting) %>%   
-  select(-method) %>% 
-  select(estimation_method,everything()) %>% 
+  dplyr::select(-method, -shape, -line_shape, -shape, -color) %>% 
+  dplyr::select(label,everything()) %>% 
   dplyr::arrange(
     factor(
-      estimation_method, 
-      levels = legend_setting$estimation_method
+      label, 
+      levels = legend_setting$label
       )
     ) 
 
@@ -43,147 +40,283 @@ res_thesis %>% stargazer::stargazer(summary=F, rownames = F)
 # ------------------------------------------------------------------------------
 #                CUMMULATIVE RETURN 
 # ------------------------------------------------------------------------------
-# test_rolling_cov_method <- results_rdata$d504$complete_results
-
-method_order <- crossing(cov_est_method, roll) %>% 
-  dplyr::select(cov_est_method) %>% 
-  unique()
-
-names(test_rolling_cov_method) <- rep(
-  method_order$cov_est_method, 
-  each=length(roll)
-)
-
-results_by_cov <- lapply(
-  seq(1,(length(method_order$cov_est_method)-1)*length(roll)+1, length(roll)), 
-  function(x) 
-    test_rolling_cov_method[x:(x+length(roll)-1)]
-)
-
-names(results_by_cov) <- method_order$cov_est_method
-
-returns <- lapply(method_order$cov_est_method, function(cov) 
-  results_by_cov[[cov]] %>% 
-    map_depth(1,1) %>%
-    reduce(rbind) %>% 
-    filter(!is.na(returns)) 
-) 
+all_returns <- results_rdata$d1260_126$returns
 
 # Calculate price-like index
-prices <- lapply(returns, function(cov){
-  log_returns <- log(1 + cov[,2]/100)
+prices <- lapply(colnames(all_returns)[-1], function(method){
+  log_returns <- log(1 + all_returns[,method]/100)
   cumulative_log_returns <- cumsum(log_returns)
   initial_price <- 1  # example initial price
   total_price_evolution <- initial_price * exp(cumulative_log_returns)
-}) %>% reduce(cbind) 
-colnames(prices) <- method_order$cov_est_method
-dates <- returns[[1]][,1]
-prices$date <- dates$date
+}) %>% reduce(cbind) %>% data.frame
+colnames(prices) <- colnames(all_returns)[-1]
+prices$date <- all_returns$date
 
-plot <- prices %>% pivot_longer(!date) %>% 
-  # filter(name =="sample") %>% 
-  ggplot(aes(x=date, y=value,color=name)) +
-  geom_line()
+last_points <- prices %>% 
+  mutate(CCM = CCM/2.5) %>%
+  pivot_longer(!date) %>% 
+  rename(method = name) %>% 
+  left_join(legend_setting, by = "method") %>% 
+  group_by(label) %>% 
+  dplyr::summarise(last = ceiling(last(value)), 
+                   date_max = as.Date("2023-01-01")) %>% 
+  ungroup()
 
-plotly::ggplotly(plot)
-
-
-
-# ------------------------------------------------------------------------------
-#                 HERFINDHAL INDEX
-# ------------------------------------------------------------------------------
+prices %>% 
+  mutate(CCM = CCM/2.5) %>% 
+  pivot_longer(!date) %>% 
+  rename(method = name) %>% 
+  left_join(legend_setting, by = "method") %>% 
+  ggplot(aes(x=date, y=value,color=label)) +
+  geom_line() +
+  scale_color_manual(values = setNames(legend_setting$color, legend_setting$label),
+                     breaks = legend_setting$label,
+                     labels = legend_setting$label) +
+  scale_shape_manual(values = setNames(legend_setting$line_shape, legend_setting$label),
+                     breaks = legend_setting$label,
+                     labels = legend_setting$label) +
+  theme_minimal() +
+  xlim(c(as.Date("1975-01-01"), as.Date("2025-01-01"))) +
+  geom_label_repel(data = last_points,
+                   aes(x = date_max, y = last, label = paste(label, last, sep=": ")),
+                   nudge_y = 2,
+                   size = 3,
+                   max.overlaps =1000,
+                   direction = "y", 
+                   segment.size = 0) +
+  ylab("Cummulative Performance") +
+  theme(legend.position = "none")
 
 # ------------------------------------------------------------------------------
 #                 MAXIMUM DRAWDOWN
 # ------------------------------------------------------------------------------
 
-max_drawdown <- lapply(method_order$cov_est_method, function(cov){
-  # Calculate the running maximum
-  running_max <- cummax(prices[,cov])
-  # Calculate drawdowns
-  drawdowns <- (running_max - prices[,cov]) / running_max
-  # Find the maximum drawdown
-  max_drawdown <- max(drawdowns)
-  date_max <- prices$date[which(drawdowns == max(drawdowns))]
-  return(data.frame(maxdraw = max_drawdown, date_max_draw = date_max))
-}) %>% reduce(rbind) %>% mutate(method = method_order$cov_est_method)
+calculate_max_drawdown_with_period <- function(portfolio_values) {
+  peak_value <- portfolio_values[1]
+  drawdowns <- numeric(length(portfolio_values))
+  start_index <- 1
+  max_drawdown <- 0
+  max_drawdown_start <- 1
+  max_drawdown_end <- 1
+  
+  for (i in seq_along(portfolio_values)) {
+    if (portfolio_values[i] > peak_value) {
+      peak_value <- portfolio_values[i]
+      start_index <- i
+    }
+    
+    drawdowns[i] <- (peak_value - portfolio_values[i]) / peak_value
+    
+    if (drawdowns[i] > max_drawdown) {
+      max_drawdown <- drawdowns[i]
+      max_drawdown_start <- start_index
+      max_drawdown_end <- i
+    }
+  }
+  dates_prices <- prices$date
 
+  c(max_drawdown, max_drawdown_start,max_drawdown_end)
+}
 
-ret_vec <- returns[[2]][,-1]
+MDD <- lapply(colnames(prices)[-length(prices)], function(x){
+  calculate_max_drawdown_with_period(prices[,x])
+}) %>% reduce(rbind) %>% 
+  data.frame %>% 
+  rename(MDD = X1, start = X2, end=X3) %>% 
+  mutate(method = colnames(prices)[-length(prices)],
+         start = prices$date[start],
+         end = prices$date[end], 
+         MDD = round(MDD*100,2)) 
 
-returns[[1]][9918,]
+rownames(MDD) <- NULL
 
+# ------------------------------------------------------------------------------
+#                 HERFINDHAL INDEX
+# ------------------------------------------------------------------------------
 
-library(fTrading)
-
-maxDrawDown(cumsum(ret_vec$returns/100))
+hhi <- results_rdata$d1260_126$weights %>% 
+  group_by(method, date) %>% 
+  dplyr::summarise(hhi = sum(value^2)) %>% 
+  ungroup() %>% 
+  group_by(method) %>% 
+  dplyr::summarise(mean_hhi = round(mean(hhi*100),2))
 
 # ------------------------------------------------------------------------------
 #                 WEIGHTS DISTRIBUTION
 # ------------------------------------------------------------------------------
 
-results_rdata$d252$weights %>% 
+w_distribution_1260_126 <- results_rdata$d1260_126$weights %>% 
   dplyr::group_by(method) %>% 
   dplyr::summarise(
-    sd = sd(value),
-    median = median(value),
-    min = min(value),
-    max = max(value),
-    q5 = quantile(value, probs = 0.05),
-    q25 = quantile(value, probs = 0.25),
-    q75 = quantile(value, probs = 0.75), 
-    q95 = quantile(value, probs = 0.95)
+    sd = round(sd(value)*100,2),
+    median = round(median(value)*100,2),
+    min = round(min(value)*100,2),
+    max = round(max(value*100),2),
+    q5 = round(quantile(value*100, probs = 0.05),2),
+    q25 = round(quantile(value*100, probs = 0.25),2),
+    q75 = round(quantile(value*100, probs = 0.75),2), 
+    q95 = round(quantile(value*100, probs = 0.95),2)
   )
 
+left_join(legend_setting %>% select(method,label), w_distribution_1260_126) %>% 
+  select(-method) %>% 
+  stargazer::stargazer(summary=F, align=T, rownames=NULL)
+
+results_rdata$d1260_126$weights %>% 
+  # filter(method == c("sample", "CCM",
+  #                    "factor3","covCor", "sample_short_constraint")) %>% 
+  filter(date > as.Date("2008-01-01")) %>% 
+  ggplot(aes(x=date, y=value, group = date)) +
+  geom_boxplot() +
+  theme_hsg() +
+  facet_wrap(~method, ncol = 3)
+  
 # ------------------------------------------------------------------------------
 #                 GLOBAL TURNOVER RATE
 # ------------------------------------------------------------------------------
-gtr_504d <- lapply(results_rdata$d504$weights$method %>% unique, 
+gtr_1260_126 <- lapply(results_rdata$d1260_126$weights$method %>% unique, 
        get_global_turnover,
-       weights = results_rdata$d504$weights, 
+       weights = results_rdata$d1260_126$weights, 
        stock_returns = ff100_data$daily, 
        frequency_day_month = "day") %>% 
   suppressMessages %>% 
   suppressWarnings %>% 
   reduce(append) %>%  
-  data.frame(method = results_rdata$d504$weights$method %>% unique,
+  data.frame(method = results_rdata$d1260_126$weights$method %>% unique,
                                     gtr = .) %>% 
-  mutate(gtr = 100*gtr)
-
-gtr_252d <- lapply(results_rdata$d252$weights$method %>% unique, 
-                   get_global_turnover,
-                   weights = results_rdata$d252$weights, 
-                   stock_returns = ff100_data$daily, 
-                   frequency_day_month = "day") %>% 
-  suppressMessages %>% 
-  suppressWarnings %>%   
-  reduce(append)   %>%  
-  data.frame(method = results_rdata$d252$weights$method %>% unique,
-             gtr = .) %>% 
-  mutate(gtr = 100*gtr)
+  mutate(gtr = round(gtr*100,2))
 
 # ------------------------------------------------------------------------------
 #                 SHORT SHARE OF THE PORTFOLO
 # ------------------------------------------------------------------------------
 
+short_1260_126 <- results_rdata$d1260_126$weights %>% 
+  group_by(method, date) %>% 
+  dplyr::summarise(abs_neg = sum(abs(value[value < 0])),
+                   abs_all = sum(abs(value))) %>%
+  ungroup() %>% 
+  group_by(method) %>% 
+  dplyr::summarise(short = round(mean(abs_neg/abs_all)*100,2)) %>% 
+  ungroup()
+
+
+
 # ------------------------------------------------------------------------------
 #                 MEAN ABSOLUTE DEVIATION
-# ------------------------------------------------------------------------------
-mad_ew_504d <- results_rdata$d504$weights %>% 
+# ------------------------------------------------------------------------------ 
+mad_ew_1260_126 <- results_rdata$d1260_126$weights %>% 
   group_by(date, method) %>% 
   dplyr::summarise(MAD = mean(abs(value - 1/n()))) %>% 
   ungroup() %>%
   group_by(method) %>% 
-  dplyr::summarise(mean_mad = mean(MAD)*100) %>% 
+  dplyr::summarise(mean_mad = round(mean(MAD*100),2)) %>% 
   ungroup
 
-mad_ew_252 <- results_rdata$d252$weights %>% 
-  group_by(date, method) %>% 
-  dplyr::summarise(MAD = mean(abs(value - 1/n()))) %>% 
-  ungroup() %>%
-  group_by(method) %>% 
-  dplyr::summarise(mean_mad = mean(MAD)*100) %>% 
-  ungroup
+# ------------------------------------------------------------------------------
+#                 MAIN WEIGHT TABLES
+# ------------------------------------------------------------------------------
+
+w_table_1260_126 <- left_join(legend_setting %>% select(method,label), res_thesis) %>% 
+  left_join(short_1260_126) %>% 
+  left_join(gtr_1260_126) %>% 
+  left_join(mad_ew_1260_126) %>% 
+  left_join(hhi) %>% 
+  select(label, everything()) %>% 
+  filter(!is.na(short)) %>% 
+  mutate(mu = round(mu,2), sd_window = round(sd_window,2), sr_window = round(sr_window,2)) %>% 
+  select(-method, -sd_overall, -sr_overall) %>% as.matrix()
+
+rownames(w_table_1260_126) <- NULL
+
+
+w_table_1260_126 %>% stargazer::stargazer(
+  summary = F, rownames = NULL
+  )
+
+
+# ------------------------------------------------------------------------------
+#                 ANALYSIS - BOOTSTRAPPED PORTFOLIO DATA
+# ------------------------------------------------------------------------------
+
+files_bootstrap <- list.files(
+  path = file.path(core_path, data_path, "bootstrap"), 
+  full.names = T
+)
+
+bt_results <- lapply(files_bootstrap, function(x){
+  get(load(x))
+}) %>% reduce(rbind) %>% 
+  mutate(sr = sr*sqrt(252)) %>% 
+  left_join(legend_setting) %>% 
+  select(-method) %>% 
+  rename(method = label) %>% 
+  select(method, returns, sd, sr) 
+  
+
+# confidence intervals
+
+# SR distributions
+
+means <- bt_results %>%
+  group_by(method) %>%
+  dplyr::summarise(mean_sr = mean(sr, na.rm = TRUE),
+                   lower_bound = quantile(sr, 0.025, na.rm = TRUE),
+                   upper_bound = quantile(sr, 0.975, na.rm = TRUE))
+
+# Plot
+ggplot(bt_results, aes(x = sr)) +
+  geom_density(alpha = 0.7) +
+  labs(title = "Density Plot of Sharpe Ratios",
+       x = "Sharpe Ratio", y = "Density") +
+  theme_minimal() +
+  geom_vline(data = means, aes(xintercept = mean_sr, group = method, color = "mean"),
+            linetype = "dashed", size = 1) +
+  geom_vline(aes(xintercept = 0,
+             color = "zero"), linetype = "dotted", size = 1) +
+  geom_segment(data=means, 
+               aes(x=lower_bound, y=0, xend=lower_bound, yend = 0.5, color = "95% CI bands")) +
+  geom_segment(data=means, 
+               aes(x=upper_bound, y=0, xend=upper_bound, yend = 0.5, color = "95% CI bands")) +
+  geom_text(data = means, aes(x = mean_sr, y = 0, 
+                              label = sprintf("%.2f", mean_sr), 
+                              group = method),
+            color = "red", vjust = -0.5, hjust = -0.1, size = 3, 
+            check_overlap = TRUE) +
+  facet_wrap(~method, ncol = 3, scales = 'free') +
+  xlim(c(-2,2))+
+  ylim(c(0,2))+
+  scale_color_manual(name = "legend", values = c(mean = "red",`95% CI bands` = "blue", zero = "grey")) +
+  theme(legend.position = "top")
+
+# Note: Adjustments might be needed based on your data's structure and the specifics of your plot.
+
+# summary stat bootstrap data
+
+sr <- bt_results %>%
+  group_by(method) %>%
+  dplyr::summarise(mean_sr =round(mean(sr, na.rm = TRUE),2),
+                   sd_sr = round(sd(sr),2),
+                   CI95 = paste0("[",round(quantile(sr, 0.025, na.rm = TRUE),2),
+                                 ";",round(quantile(sr, 0.975, na.rm = TRUE),2),
+                                 "]"))
+
+ret <- bt_results %>%
+  group_by(method) %>%
+  dplyr::summarise(mean_ret = mean(returns, na.rm = TRUE),
+                   sd_ret = sd(returns),
+                   CI95 = paste0("[",round(quantile(returns, 0.025, na.rm = TRUE),2),
+                                 ";",round(quantile(returns, 0.975, na.rm = TRUE),2),
+                                 "]"))
+
+sd <- bt_results %>%
+  group_by(method) %>%
+  dplyr::summarise(mean_sd = mean(sd, na.rm = TRUE),
+                   sd_sd = sd(sd),
+                   CI95 = paste0("[",round(quantile(sd, 0.025, na.rm = TRUE),2),
+                                 ";",round(quantile(sd, 0.975, na.rm = TRUE),2),
+                                 "]"))
+
+sr %>%  stargazer::stargazer(summary=F, rownames = F)
 
 
 # ##############################################################################

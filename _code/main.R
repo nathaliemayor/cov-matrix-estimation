@@ -4,7 +4,7 @@
 # execute preamble with packages, own functions and package preferences
 source("preamble.R")
 
-# define paths 
+# define paths
 core_path <- "/Users/pro/Library/Mobile Documents/com~apple~CloudDocs"
 data_path <- "masters_thesis/data"
 from_date <- as.Date("1970-01-01")
@@ -67,24 +67,15 @@ factors_daily <- rio::import(
 # ------------------------------------------------------------------------------
 #                 DEFINE PARAMETERS, SETTINGS
 # ------------------------------------------------------------------------------
-ff100_data$daily <- ff100_data$daily
-training_period <- 252*5 # obs
-rolling_period <- 21   # obs
-n <- dim(ff100_data$daily)[2]
+training_period <- 252 # obs
+rolling_period <- 21*6  # obs
 k <- dim(ff100_data$daily)[1]
 frequency <- "daily" # "monthly"
-
-if(frequency == "daily"){
-  assets_returns <- ff100_data$daily
-  factors_returns <- factors_daily 
-}else if(frequency == "monthly"){
-  assets_returns <- ff100_data$monthly
-  factors_returns <- factors
-}
 
 # rules: 
 # lis: n_obs > n_var
 # CovMve: n_obs > 2*n_var
+# slow: huge_glasso, covMve, covMcd, RMT
 
 cov_est_method = c(
   "cov1Para", 
@@ -98,7 +89,7 @@ cov_est_method = c(
   "lis",
   "CovMve",
   "CovMcd",
-  "huge_glasso",
+  # "huge_glasso",
   "equal_weights",
   "factor1",
   "factor3",
@@ -110,9 +101,14 @@ roll <- seq(1, k - training_period, rolling_period)
 # ------------------------------------------------------------------------------
 #                 HISTORICAL DATA - COMPUTE PORTFOLIOS
 # ------------------------------------------------------------------------------
-# cov_est_method <- "CCM"
+iterations <- crossing(cov_est_method, roll) 
+  # mutate(roll = case_when(
+  #   roll == 5209 & cov_est_method == "RMT" ~ 5210,   
+  #   TRUE~roll))
+
+tictoc::tic()
 test_rolling_cov_method <- pmap(
-  crossing(cov_est_method, roll),
+  iterations,
   get_portfolio_metrics, 
   stock_returns = ff100_data$daily,
   portfolio_optimization = "tangent",
@@ -120,6 +116,8 @@ test_rolling_cov_method <- pmap(
   frequency = frequency, 
   factor_returns = factors_daily
 )
+tictoc::toc()
+
 method_order <- crossing(cov_est_method, roll) %>% 
   dplyr::select(cov_est_method) %>% 
   unique()
@@ -137,17 +135,17 @@ results_by_cov <- lapply(
 
 names(results_by_cov) <- method_order$cov_est_method
 
-all_avg_returns <- lapply(method_order$cov_est_method, function(cov) 
+all_returns <- lapply(method_order$cov_est_method, function(cov) 
   results_by_cov[[cov]] %>% 
     map_depth(1,1) %>%
     reduce(rbind) %>% 
     filter(!is.na(returns)) %>% 
-    dplyr::summarise(mean = mean(returns))
-  ) %>% 
-  unlist %>% 
-  reduce(append)
+    rename(!!cov := returns)
+  ) %>% reduce(cbind) %>% select(which(!duplicated(names(.))))
 
-all_sd <- lapply(method_order$cov_est_method, function(cov) 
+all_avg_window_returns <- all_returns[,-1] %>% colMeans()
+
+all_avg_overall_sd <- lapply(method_order$cov_est_method, function(cov) 
   results_by_cov[[cov]] %>% 
     map_depth(1,1) %>%
     reduce(rbind) %>% 
@@ -157,41 +155,23 @@ all_sd <- lapply(method_order$cov_est_method, function(cov)
   unlist %>% 
   reduce(append)
 
-all_avg_sd <- lapply(method_order$cov_est_method, function(cov) 
+all_window_sd <- lapply(method_order$cov_est_method, function(cov) 
   results_by_cov[[cov]] %>% 
     map_depth(1,2) %>% 
-    reduce(append) %>% 
-    na.omit %>% 
-    mean) %>% 
-  reduce(append)
+    reduce(append)) %>% 
+  reduce(cbind) %>% 
+  magrittr::set_colnames(method_order$cov_est_method) %>% data.frame
 
-ggplot(
-  tibble(
-    method = method_order$cov_est_method, 
-    returns = all_avg_returns, 
-    sd = all_avg_sd
-  ) %>% 
-  filter(!method %in% c("CovMve")),
-  aes(x = sd, y = returns)) +
-  geom_point() +
-  geom_label_repel(
-    aes(label = method),
-    box.padding = 1,
-    point.padding = 1,
-    segment.color = "grey",
-    color = "darkgreen"
-  ) +
-  theme_hsg() +
-  # xlim(c(11,24)) +
-  ggtitle("Tangent portfolios with various covariance matrix estimation methods")
+all_avg_window_sd <- all_window_sd %>% colMeans(na.rm=T)
 
-all_avg_sr <- lapply(method_order$cov_est_method, function(cov) 
+all_window_sr <- lapply(method_order$cov_est_method, function(cov) 
   results_by_cov[[cov]] %>% 
     map_depth(1,3) %>% 
-    reduce(append) %>% 
-    na.omit %>% 
-    mean) %>% 
-  reduce(append)
+    reduce(append)) %>% 
+  reduce(cbind) %>% 
+  magrittr::set_colnames(method_order$cov_est_method) %>% data.frame
+
+all_avg_window_sr <- all_window_sr %>% colMeans(na.rm = T)
 
 all_weights <- lapply(method_order$cov_est_method, function(cov) 
   data <- results_by_cov[[cov]] %>% 
@@ -199,102 +179,19 @@ all_weights <- lapply(method_order$cov_est_method, function(cov)
     reduce(cbind) %>% 
     t %>% 
     as_tibble %>% 
-    mutate(date = seq.Date(
-      from = from_date + months(training_period), 
-      to = to_date, 
-      by = "6 month"
-    )
-    ) %>% 
+    mutate(date = ff100_data$daily$Date[(training_period+roll)]) %>% 
     dplyr::select(date, everything()) %>% 
+    magrittr::set_colnames(c("date",colnames(ff100_data$daily)[-1])) %>% 
     pivot_longer(!date) %>% 
     mutate(method = cov)
   ) %>% 
   reduce(rbind)
 
-all_weights %>% 
-  filter(method == "cov1Para") %>% 
-  ggplot(aes(x=date, y=value, group = name)) +
-  geom_boxplot(fill = "lightblue") +
-  facet_wrap(~method, scales = "free", ncol = 1) +
-  theme_hsg()
-
-all_weights %>% 
-  dplyr::group_by(method) %>% 
-  dplyr::summarise(
-            sd = sd(value),
-            median = median(value),
-            min = min(value),
-            max = max(value),
-            q5 = quantile(value, probs = 0.05),
-            q25 = quantile(value, probs = 0.25),
-            q75 = quantile(value, probs = 0.75), 
-            q95 = quantile(value, probs = 0.95)
-            )
-
-test_weights <- all_weights %>% 
-  group_by(date)
-
-test_weights <- all_weights %>% 
-  filter(name == "ME1 BM4") %>% .[,"value"]
-
-diff(test_weights$value) %>% 
-  abs %>% 
-  sum
-
-test_daily <- lapply(
-  roll,
-  get_portfolio_metrics,
-  stock_returns = ff100_data$daily,
-  cov_est_method = "sample",
-  portfolio_optimization = "tangent",
-  short = TRUE,
-  frequency = "daily",
-  factor_returns  = NULL
-)
-
-ret_d <- test_daily %>%  
-  map_depth(1,1) %>%
-  reduce(rbind) %>% 
-  filter(!is.na(returns)) %>% 
-  dplyr::summarise(mean = mean(returns))
-
-sd_d <- test_daily %>%  
-  map_depth(1,2) %>%
-  reduce(rbind) %>% 
-  na.omit() %>% 
-  mean()
-
-sd_ret_d <- test_daily %>%  
-  map_depth(1,1) %>%
-  reduce(rbind) %>% 
-  filter(!is.na(returns)) %>% 
-  dplyr::summarise(sd = sd(returns))
-
-sr_d <- test_daily %>%  
-  map_depth(1,3) %>%
-  reduce(rbind) %>% 
-  na.omit() %>% 
-  mean()
-
-sample_daily_weights <- test_daily %>% 
-  map_depth(1,4) %>% 
-  reduce(cbind) %>% 
-  t %>% 
-  as_tibble %>% 
-  mutate(date = seq.Date(
-    from = from_date + months(training_period), 
-    to = to_date, 
-    by = "6 month"
-  )
-  ) %>% 
-  dplyr::select(date, everything()) %>% 
-  pivot_longer(!date) %>% 
-  mutate(method = "daily_sample")
-
+# benchmark: short restriction
 test_short_restriction <- lapply(
   roll, 
   get_portfolio_metrics,
-  stock_returns = assets_returns,
+  stock_returns = ff100_data$daily,
   cov_est_method = "sample",
   portfolio_optimization = "tangent",
   short = FALSE,
@@ -302,49 +199,94 @@ test_short_restriction <- lapply(
   factor_returns = NULL
   )
 
-ret <- test_short_restriction %>% 
+returns_short <- test_short_restriction %>% 
   map_depth(1,1) %>% 
-  do.call(rbind,.) 
-
-ret_short <- mean(ret$returns %>% na.omit)
-
-sd_ret_short <- sd(ret$returns %>% na.omit)
-
-sd_short <- test_short_restriction %>% 
-  map_depth(1,2) %>% 
   do.call(rbind,.) %>% 
-  na.omit %>% 
-  mean
+  rename(sample_short_constraint = returns)
 
-sr_short <- test_short_restriction %>%  
+avg_returns_short <- mean(returns_short$sample_short_constraint %>% na.omit)
+
+sd_avg_overall_short <- sd(returns_short$sample_short_constraint %>% na.omit)
+
+sd_window_short <- test_short_restriction %>% 
+  map_depth(1,2) %>% 
+  reduce(append)
+  
+sd_avg_window_short <- mean(sd_window_short, na.rm = TRUE)
+
+sr_window_short <- test_short_restriction %>%  
   map_depth(1,3) %>%
-  reduce(rbind) %>% 
-  na.omit() %>% 
-  mean()
+  reduce(append)
+
+sr_avg_window_short <- sr_window_short %>% mean(na.rm =TRUE)
 
 short_restriction_weights <- test_short_restriction %>% 
   map_depth(1,4) %>% 
   reduce(cbind) %>% 
   t %>% 
   as_tibble %>% 
-  mutate(date = seq.Date(
-    from = from_date + months(training_period), 
-    to = to_date, 
-    by = "6 month"
-  )
-  ) %>% 
+  mutate(date = ff100_data$daily$Date[(training_period+roll)]) %>% 
   dplyr::select(date, everything()) %>% 
+  magrittr::set_colnames(c("date",colnames(ff100_data$daily)[-1])) %>% 
   pivot_longer(!date) %>% 
   mutate(method = "sample_short_constraint")
 
+# compute performances for long methods: huge_glasso
+library(foreach)
+library(doParallel)
+registerDoParallel(cores = 4)
+tictoc::tic()
+cov_est_method <- "huge_glasso"
+df_parallel <- foreach(roll = roll, 
+             .combine = rbind) %dopar% {
+               get_portfolio_metrics(cov_est_method = cov_est_method,
+                                     roll,
+                                     stock_returns = ff100_data$daily,
+                                     portfolio_optimization = "tangent",
+                                     short = TRUE, 
+                                     frequency = frequency,
+                                     factor_returns = factors_daily)
+             }
+stopImplicitCluster()
+tictoc::toc()
+
+parallel_returns <- df_parallel[1:(dim(df_parallel)[1])] %>% 
+  reduce(rbind) %>% 
+  rename(huge_glasso = returns)
+
+parallel_returns_avg <- mean(parallel_returns$huge_glasso, na.rm=T)
+
+parallel_sd_overall <- sd(parallel_returns$huge_glasso, na.rm=T)
+
+parallel_sd_window <- df_parallel[(dim(df_parallel)[1]+1):
+                                    (dim(df_parallel)[1]*2)] %>% 
+  reduce(rbind)
+parallel_sd_window_avg <- mean(parallel_sd_window,na.rm=T) 
+
+parallel_sr_window <- df_parallel[(dim(df_parallel)[1]*2+1):
+                                    (dim(df_parallel)[1]*3)] %>% 
+  reduce(rbind)
+parallel_sr_window_avg <- mean(parallel_sr_window, na.rm=T)
+parallel_weights <- df_parallel[(dim(df_parallel)[1]*3+1):
+                                    (dim(df_parallel)[1]*4)] %>% 
+  reduce(cbind) %>% 
+  t %>% 
+  as_tibble %>% 
+  mutate(date = ff100_data$daily$Date[(training_period+roll)]) %>% 
+  dplyr::select(date, everything()) %>% 
+  magrittr::set_colnames(c("date",colnames(ff100_data$daily)[-1])) %>% 
+  pivot_longer(!date) %>% 
+  mutate(method = "huge_glasso")
+
 # annual statistics for SP500
 stat_sp500 <- GSPC$GSPC.Adjusted %>% fortify.zoo() %>% 
-  filter(Index > from_date+months(training_period)&
-           Index < to_date) %>% 
+  filter(Index > (ff100_data$daily$Date[training_period]) &
+           Index < (ff100_data$daily$Date[nrow(ff100_data$daily)])) %>% 
   mutate(returns = diff(GSPC.Adjusted)/lag(GSPC.Adjusted)) %>% 
   dplyr::summarise(mean = (mean(returns)*252*100),
                    sd = (sd(returns)*sqrt(252))*100,
-                   sr = (mean(returns)*252*100-0.5)/((sd(returns)*sqrt(252))*100))
+                   sr = (mean(returns)*252*100-6.3)/((sd(returns)*sqrt(252))*100)) %>% 
+  suppressWarnings()
 
 if(frequency == "daily"){
   to_annual <- 252
@@ -354,30 +296,49 @@ if(frequency == "daily"){
 
 results_data <- data.frame(
   method = method_order$cov_est_method, 
-  mu = all_avg_returns*to_annual,
-  sd_window = all_avg_sd*sqrt(to_annual), 
-  sr_window = all_avg_sr*sqrt(to_annual), 
-  sd_overall = all_sd*sqrt(to_annual)
-) %>%  add_row(
-  method = "daily_sample", 
-  mu = ret_d$mean*252, 
-  sd_window = sd_d*sqrt(252), 
-  sr_window = sr_d*sqrt(252),
-  sd_overall = sd_ret_short*sqrt(252)
-) %>% 
-  add_row(
+  mu = all_avg_window_returns*to_annual,
+  sd_window = all_avg_window_sd*sqrt(to_annual), 
+  sr_window = all_avg_window_sr*sqrt(to_annual), 
+  sd_overall = all_avg_overall_sd*sqrt(to_annual)
+) %>% add_row(
     method = "sample_short_constraint", 
-    mu = ret_short*to_annual, 
-    sd_window = sd_short*sqrt(to_annual),
-    sr_window = sr_short*sqrt(to_annual),
-    sd_overall = sd_ret_short*sqrt(to_annual)
-  ) %>% mutate(sr_overall = (mu-6)/sd_overall) %>% 
+    mu = avg_returns_short*to_annual, 
+    sd_window = sd_avg_window_short*sqrt(to_annual),
+    sr_window = sr_avg_window_short*sqrt(to_annual),
+    sd_overall = sd_avg_overall_short*sqrt(to_annual)
+  ) %>% add_row(
+    method = "huge_glasso", 
+    mu = parallel_returns_avg*to_annual, 
+    sd_window = parallel_sd_window_avg*sqrt(to_annual),
+    sr_window = parallel_sr_window_avg*sqrt(to_annual),
+    sd_overall = parallel_sd_overall*sqrt(to_annual)
+  ) %>% mutate(sr_overall = (mu-6.3)/sd_overall) %>% 
   add_row(
     method = "SP500", 
     mu = stat_sp500$mean, 
     sd_overall = stat_sp500$sd,
     sr_overall = stat_sp500$sr
   )
+
+complete_weights <- all_weights %>% 
+  rbind(parallel_weights) %>% 
+  rbind(short_restriction_weights)
+
+complete_returns <- all_returns %>% 
+  cbind(returns_short[,-1] %>% na.omit) %>% 
+  cbind(parallel_returns[,-1] %>% na.omit)
+
+complete_window_sd <- all_window_sd %>% 
+  cbind(sd_window_short) %>% 
+  cbind(parallel_sd_window) %>% 
+  rename(huge_glasso = parallel_sd_window, 
+         sample_short_constraint=sd_window_short)
+
+complete_window_sr <- all_window_sr %>% 
+  cbind(sr_window_short) %>% 
+  cbind(parallel_sr_window) %>% 
+  rename(huge_glasso = parallel_sr_window, 
+         sample_short_constraint=sr_window_short)
  
 # ------------------------------------------------------------------------------
 #                 BOOTSTRAPPED PORTFOLIO DATA
@@ -387,9 +348,8 @@ library(doParallel)
 registerDoParallel(cores = 4)
 tictoc::tic()
 n_bootstraps <- 1000
-cov_est_method <- "factor1"
-df_all <- foreach(cov_method = cov_est_method, .combine = rbind) %dopar% {
-  bootstrap_cov_estimates(cov_method, 
+bootstrap_factor1 <- foreach(cov_est_method = "factor1", .combine = rbind) %dopar% {
+  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
                           roll = roll, 
                           n_bootstraps = n_bootstraps,
                           data = ff100_data$daily,
@@ -398,26 +358,187 @@ df_all <- foreach(cov_method = cov_est_method, .combine = rbind) %dopar% {
 }
 stopImplicitCluster()
 tictoc::toc()
+save(bootstrap_factor1, file = file.path(core_path, data_path, "bootstrap_factor1_1000.RData"))
 
-bootstrap_factor1 <- df_all %>% 
-  mutate(sr = sqrt(252)*returns/sd)
-
-
+registerDoParallel(cores = 4)
 tictoc::tic()
-df_all <- lapply(cov_est_method, 
-       bootstrap_cov_estimates, 
-       roll=roll, 
-       n_bootstraps=n_bootstraps,
-       data = ff100_data$daily,
-       frequency = frequency,
-       factor_returns = factors_daily) %>% 
-  reduce(rbind)
+n_bootstraps <- 1000
+cov_est_method <- "factor3"
+bootstrap_factor3 <- foreach(cov_est_method = "factor3", .combine = rbind) %dopar% {
+  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
+                          roll = roll, 
+                          n_bootstraps = n_bootstraps,
+                          data = ff100_data$daily,
+                          frequency = frequency,
+                          factor_returns = factors_daily)
+}
+stopImplicitCluster()
 tictoc::toc()
+save(bootstrap_factor3, file = file.path(core_path, data_path, "bootstrap_factor3_1000.RData"))
+
+registerDoParallel(cores = 4)
+tictoc::tic()
+n_bootstraps <- 1000
+bootstrap_cov1Para <- foreach(cov_est_method = "cov1Para", .combine = rbind) %dopar% {
+  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
+                          roll = roll, 
+                          n_bootstraps = n_bootstraps,
+                          data = ff100_data$daily,
+                          frequency = frequency,
+                          factor_returns = factors_daily)
+}
+stopImplicitCluster()
+tictoc::toc()
+save(bootstrap_cov1Para, file = file.path(core_path, data_path, "bootstrap_cov1Para_1000.RData"))
+
+registerDoParallel(cores = 4)
+tictoc::tic()
+n_bootstraps <- 1000
+bootstrap_cov2Para <- foreach(cov_est_method = "cov2Para", .combine = rbind) %dopar% {
+  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
+                          roll = roll, 
+                          n_bootstraps = n_bootstraps,
+                          data = ff100_data$daily,
+                          frequency = frequency,
+                          factor_returns = factors_daily)
+}
+stopImplicitCluster()
+tictoc::toc()
+save(bootstrap_cov2Para, file = file.path(core_path, data_path, "bootstrap_cov2Para_1000.RData"))
+
+registerDoParallel(cores = 4)
+tictoc::tic()
+n_bootstraps <- 1000
+bootstrap_covCor <- foreach(cov_est_method = "covCor", .combine = rbind) %dopar% {
+  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
+                          roll = roll, 
+                          n_bootstraps = n_bootstraps,
+                          data = ff100_data$daily,
+                          frequency = frequency,
+                          factor_returns = factors_daily)
+}
+stopImplicitCluster()
+tictoc::toc()
+save(bootstrap_covCor, file = file.path(core_path, data_path, "bootstrap_covCor_1000.RData"))
+
+registerDoParallel(cores = 4)
+tictoc::tic()
+n_bootstraps <- 1000
+bootstrap_CCM <- foreach(cov_est_method = "CCM", .combine = rbind) %dopar% {
+  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
+                          roll = roll, 
+                          n_bootstraps = n_bootstraps,
+                          data = ff100_data$daily,
+                          frequency = frequency,
+                          factor_returns = factors_daily)
+}
+stopImplicitCluster()
+tictoc::toc()
+save(bootstrap_CCM, file = file.path(core_path, data_path, "bootstrap_ccm_1000.RData"))
+
+registerDoParallel(cores = 4)
+tictoc::tic()
+n_bootstraps <- 1000
+bootstrap_covDiag <- foreach(cov_est_method = "covDiag", .combine = rbind) %dopar% {
+  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
+                          roll = roll, 
+                          n_bootstraps = n_bootstraps,
+                          data = ff100_data$daily,
+                          frequency = frequency,
+                          factor_returns = factors_daily)
+}
+stopImplicitCluster()
+tictoc::toc()
+save(bootstrap_covDiag, file = file.path(core_path, data_path, "bootstrap_covDiag_1000.RData"))
+
+registerDoParallel(cores = 4)
+tictoc::tic()
+n_bootstraps <- 1000
+bootstrap_covMarket <- foreach(cov_est_method = "covMarket", .combine = rbind) %dopar% {
+  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
+                          roll = roll, 
+                          n_bootstraps = n_bootstraps,
+                          data = ff100_data$daily,
+                          frequency = frequency,
+                          factor_returns = factors_daily)
+}
+stopImplicitCluster()
+tictoc::toc()
+save(bootstrap_covMarket, file = file.path(core_path, data_path, "bootstrap_covMarket_1000.RData"))
+
+registerDoParallel(cores = 4)
+tictoc::tic()
+n_bootstraps <- 1000
+bootstrap_gis <- foreach(cov_est_method = "gis", .combine = rbind) %dopar% {
+  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
+                          roll = roll, 
+                          n_bootstraps = n_bootstraps,
+                          data = ff100_data$daily,
+                          frequency = frequency,
+                          factor_returns = factors_daily)
+}
+stopImplicitCluster()
+tictoc::toc()
+save(bootstrap_gis, file = file.path(core_path, data_path, "bootstrap_gis_1000.RData"))
+
+registerDoParallel(cores = 4)
+tictoc::tic()
+n_bootstraps <- 1000
+bootstrap_lis <- foreach(cov_est_method = "lis", .combine = rbind) %dopar% {
+  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
+                          roll = roll, 
+                          n_bootstraps = n_bootstraps,
+                          data = ff100_data$daily,
+                          frequency = frequency,
+                          factor_returns = factors_daily)
+}
+stopImplicitCluster()
+tictoc::toc()
+save(bootstrap_lis, file = file.path(core_path, data_path, "bootstrap_lis_1000.RData"))
+
+
+registerDoParallel(cores = 4)
+tictoc::tic()
+n_bootstraps <- 1000
+bootstrap_qis <- foreach(cov_est_method = "qis", .combine = rbind) %dopar% {
+  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
+                          roll = roll, 
+                          n_bootstraps = n_bootstraps,
+                          data = ff100_data$daily,
+                          frequency = frequency,
+                          factor_returns = factors_daily)
+}
+stopImplicitCluster()
+tictoc::toc()
+save(bootstrap_qis, file = file.path(core_path, data_path, "bootstrap_qis_1000.RData"))
+
+registerDoParallel(cores = 4)
+tictoc::tic()
+n_bootstraps <- 1000
+bootstrap_equal_weights <- foreach(cov_est_method = "equal_weights", .combine = rbind) %dopar% {
+  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
+                          roll = roll, 
+                          n_bootstraps = n_bootstraps,
+                          data = ff100_data$daily,
+                          frequency = frequency,
+                          factor_returns = factors_daily)
+}
+stopImplicitCluster()
+tictoc::toc()
+save(bootstrap_equal_weights, file = file.path(core_path, data_path, 
+                                        "bootstrap_equal_weights_1000.RData"))
+
+
+
+
+
+
+
 
 #getting the convex hull of each unique point set
 
 load(file.path(core_path, data_path, "bootstrap_cov.RData"))
-# save(bootstrap_factor1, file = file.path(core_path, data_path, "bootstrap_factor1_1000.RData"))
+
 
 df_all_bis <- df_all %>% 
   mutate(returns = returns*252,
@@ -448,6 +569,8 @@ test_daily %>%
   filter(returns < 50 & sd < 200) %>% 
   ggplot(aes(x=sd, y = returns, color = method)) +
   geom_point()
+
+
 
 
 

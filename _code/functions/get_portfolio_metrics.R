@@ -35,13 +35,8 @@ get_portfolio_metrics <- function (
     (roll):(training_period+roll-1),
     1
   ]
-  # rf <- window(TNX,
-  #            start = first(training_date),
-  #            end = last(training_date))$TNX.Adjusted %>%
-  # # get average monthly rate, percentage to decimal
-  # mean(na.rm = T)/freq
   
-  rf <- 0.5
+  rf <- (0.5)
   
   if(cov_est_method %in% c("factor1", "factor3")){
     training_factor_data <- factor_returns[
@@ -62,7 +57,8 @@ get_portfolio_metrics <- function (
     # get average monthly rate, percentage to decimal
     mean(na.rm = T)/freq
   # covariance estimation
-  ## linear shrinkage 
+  
+  rf_sr <- 0.025
   
   if (!cov_est_method == "equal_weights") {
     sigma_hat = get_covariance_estimate(

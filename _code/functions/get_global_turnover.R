@@ -52,12 +52,13 @@ get_global_turnover <- function(weights,
     left_join(rebalancing_dates %>% select(date, reb_date)) %>% 
     fill(reb_date, .direction = "down") %>% 
     group_by(asset_name, reb_date) %>%
-    dplyr::summarise(adjusted_weight = last(cumprod(1 + asset_daily_returns) * asset_weight),
+    dplyr::summarise(adjusted_weight = last(cumprod(1 + asset_daily_returns) * 
+                                              asset_weight),
                      initial_weight = first(asset_weight)) %>%
     ungroup() %>% 
     group_by(asset_name) %>% 
     dplyr::summarise(adjusted_weight = c(0,adjusted_weight[-dim(.)[2]]),
-                     reb_date =reb_date,
+                     reb_date = reb_date,
                      initial=initial_weight) %>% 
     ungroup() %>% 
     mutate(diff = abs(initial - adjusted_weight)) %>% 

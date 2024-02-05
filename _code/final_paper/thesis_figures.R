@@ -2,26 +2,85 @@
 #                 THESIS FIGURES
 # ##############################################################################
 # results_rdata <- list() 
+# 252 days estimation, 126 days holding, from 1970 to 2019
+results_252_126 <- results_data
+weights_252_126 <- complete_weights
+returns_252_126 <- complete_returns
+window_sd_252_126 <- complete_window_sd
+window_sr_252_126 <- complete_window_sr
 
-# 252 DAYS, 01-01-1970 TO 01-12-2019
-results_252d <- results_data
-all_weights_252d <- all_weights
-all_weights_252d <- all_weights_252d %>% 
-  rbind(sample_daily_weights) %>% 
-  rbind(short_restriction_weights)
+results_rdata$d252_126 <- list(results = results_252_126, 
+                                weights = weights_252_126,
+                                returns = returns_252_126,
+                                window_sd = window_sd_252_126,
+                                window_sr = window_sr_252_126)
 
-results_rdata$d252 <- list(results = results_252d, 
-                           weights = all_weights_252d,
-                           complete_results = test_rolling_cov_method)
+# 252 days estimation, 21 days holding
+results_252_21 <- results_data
+weights_252_21 <- complete_weights
+returns_252_21 <- complete_returns
+window_sd_252_21 <- complete_window_sd
+window_sr_252_21 <- complete_window_sr
 
-# 504 DAYS, 01-01-1970 TO 01-12-2019
-results_504d <- results_data 
-all_weights_504d <- all_weights %>% 
-  rbind(short_restriction_weights)
+results_rdata$d252_21 <- list(results = results_252_21, 
+                               weights = weights_252_21,
+                               returns = returns_252_21,
+                               window_sd = window_sd_252_21,
+                               window_sr = window_sr_252_21)
 
-results_rdata$d504 <- list(results = results_504d, 
-                           weights = all_weights_504d,
-                           complete_results = test_rolling_cov_method)
+# 1260 days estimation, 126 days holding, from 1970 to 2019
+results_1260_126 <- results_data
+weights_1260_126 <- complete_weights
+returns_1260_126 <- complete_returns
+window_sd_1260_126 <- complete_window_sd
+window_sr_1260_126 <- complete_window_sr
+
+results_rdata$d1260_126 <- list(results = results_1260_126, 
+                           weights = weights_1260_126,
+                           returns = returns_1260_126,
+                           window_sd = window_sd_1260_126,
+                           window_sr = window_sr_1260_126)
+
+# 1260 days estimation, 21 days holding
+results_1260_21 <- results_data
+weights_1260_21 <- complete_weights
+returns_1260_21 <- complete_returns
+window_sd_1260_21 <- complete_window_sd
+window_sr_1260_21 <- complete_window_sr
+
+results_rdata$d1260_21 <- list(results = results_1260_21, 
+                                weights = weights_1260_21,
+                                returns = returns_1260_21,
+                                window_sd = window_sd_1260_21,
+                                window_sr = window_sr_1260_21)
+
+# 2520 days estimation, 126 days holding
+
+results_2520_126 <- results_data
+weights_2520_126 <- complete_weights
+returns_2520_126 <- complete_returns
+window_sd_2520_126 <- complete_window_sd
+window_sr_2520_126 <- complete_window_sr
+
+results_rdata$d2520_126 <- list(results = results_2520_126, 
+                               weights = weights_2520_126,
+                               returns = returns_2520_126,
+                               window_sd = window_sd_2520_126,
+                               window_sr = window_sr_2520_126)
+
+# 2520 days estimation, 21 days holding
+
+results_2520_21 <- results_data
+weights_2520_21 <- complete_weights
+returns_2520_21 <- complete_returns
+window_sd_2520_21 <- complete_window_sd
+window_sr_2520_21 <- complete_window_sr
+
+results_rdata$d2520_21 <- list(results = results_2520_21, 
+                               weights = weights_2520_21,
+                               returns = returns_2520_21,
+                               window_sd = window_sd_2520_21,
+                               window_sr = window_sr_2520_21)
 
 save(
   results_rdata, 
@@ -68,26 +127,29 @@ legend_setting <-  data.frame(
                                   "huge_glasso",
                                   "CCM","factor1","factor3","RMT",
                                   "sample", "SP500","equal_weights",
-             "daily_sample","sample_short_constraint"),
+             "sample_short_constraint"),
   label = c("LS-1P","LS-2P","LS-CCM","LS-D","LS-SIM","NS-GIS","NS-QIS","NS-LIS",
-            "MVE","MCD","GLASSO","CCM","SIM","MIM","RMT","SampleM","SP500","EQW",
-            "SampleD","W+"),
+            "MVE","MCD","GLASSO","CCM","SIM","MIM","RMT",
+            "Sample","SP500","EQW","W+"),
   color = c("tomato3","blue","forestgreen","orange","purple","red","blue","springgreen","chartreuse1",
             "darkblue","black","darkred","magenta","cornflowerblue","orange3","red4","cornflowerblue",
-            "black","darkorange","purple1"),
-  shape = c(19,19,19,19,19,25,25,25,15,15,10,17,17,17,17,8,8,8,8,8)
+            "black","darkorange"),
+  shape = c(19,19,19,19,19,25,25,25,15,15,10,17,17,17,17,8,8,8,8)
 )
 
-# 240 MONTHS, 01-01-1970 TO 01-12-2023
-ggplot(
-  tibble(
-    method = results_rdata$m240$results$method, 
-    returns = results_rdata$m240$results$mu, 
-    sd = results_rdata$m240$results$sd_window
-  ) %>% left_join(legend_setting) %>%
-    filter(!method %in% c("")),
-  aes(x = sd, y = returns, color = method,shape = method)) +
-  geom_point(size = 4) +
+# estimation 252 days, test 126 days, 01-01-1970 TO 01-12-2019
+data_ggplot <- tibble(
+  method = results_rdata$d252_126$results$method,
+  returns = results_rdata$d252_126$results$mu, 
+  sd = results_rdata$d252_126$results$sd_window
+) %>% left_join(legend_setting) %>%
+  filter(!method %in% c("SP500"))
+
+nls_labels <- data_ggplot %>% filter(method %in% c("gis","qis","lis"))
+
+ggplot(data_ggplot,
+       aes(x = sd, y = returns, color = method,shape = method)) +
+  geom_point(size = 6) +
   scale_color_manual(values = setNames(legend_setting$color, legend_setting$method),
                      breaks = legend_setting$method,
                      labels = legend_setting$label) +
@@ -95,21 +157,39 @@ ggplot(
                      breaks = legend_setting$method,
                      labels = legend_setting$label) +
   labs(color = "Methods", shape = "Methods") +
-  theme(legend.position = "right") +
+  theme(legend.position = "right",
+        legend.text = element_text(size=16),
+        axis.title.x = element_text(size=20),
+        axis.title.y = element_text(size=20),
+        axis.text.x  = element_text(size=20),
+        axis.text.y  = element_text(size=20)) +
+  geom_label_repel(aes(label = label), 
+                   data = nls_labels,
+                   direction = "y",
+                   segment.color = "grey",
+                   color = "darkgreen",
+                   nudge_y = 3,
+                   segment.size=1) +
   theme_hsg() +
-  xlab("returns standard deviation, annual") +
-  ylab("returns mean, annual")
+  xlab("returns standard deviation (%), annual") +
+  ylab("returns mean (%), annual") +
+  scale_x_continuous(breaks = 0:50) +
+  ylim(c(9,25)) +
+  scale_y_continuous(breaks = 0:24) 
 
-# 180 MONTHS, 01-01-1970 TO 01-12-2019
-ggplot(
-  tibble(
-    method = results_rdata$m180$results$method, 
-    returns = results_rdata$m180$results$mu, 
-    sd = results_rdata$m180$results$sd_overall
-  ) %>% left_join(legend_setting) %>%
-    filter(!method %in% c("")),
-  aes(x = sd, y = returns, color = method,shape = method)) +
-  geom_point(size = 4) +
+# estimation 1260 days, test 21 days, 01-01-1970 TO 01-12-2019
+data_ggplot <- tibble(
+  method = results_rdata$d1260_21$results$method, 
+  returns = results_rdata$d1260_21$results$mu, 
+  sd = results_rdata$d1260_21$results$sd_overall
+) %>% left_join(legend_setting) %>%
+  filter(!method %in% c(""))
+
+nls_labels <- data_ggplot %>% filter(method %in% c("gis","qis","lis"))
+
+ggplot(data_ggplot,
+       aes(x = sd, y = returns, color = method,shape = method)) +
+  geom_point(size = 6) +
   scale_color_manual(values = setNames(legend_setting$color, legend_setting$method),
                      breaks = legend_setting$method,
                      labels = legend_setting$label) +
@@ -117,85 +197,36 @@ ggplot(
                      breaks = legend_setting$method,
                      labels = legend_setting$label) +
   labs(color = "Methods", shape = "Methods") +
-  theme(legend.position = "right") +
+  theme(legend.position = "right",
+        legend.text = element_text(size=16),
+        axis.title.x = element_text(size=20),
+        axis.title.y = element_text(size=20),
+        axis.text.x  = element_text(size=20),
+        axis.text.y  = element_text(size=20)) +
+  geom_label_repel(aes(label = label), 
+                   data = nls_labels,
+                   direction = "y",
+                   segment.color = "grey",
+                   color = "darkgreen",
+                   nudge_y = 1) +
   theme_hsg() +
-  xlab("returns standard deviation, annual") +
-  ylab("returns mean, annual")
+  xlab("returns standard deviation (%), annual") +
+  ylab("returns mean (%), annual") +
+  scale_x_continuous(breaks = 0:50) +
+  scale_y_continuous(breaks = 0:24) 
 
-# 120 MONTHS, 01-01-1970 TO 01-12-2023
-ggplot(
-  tibble(
-    method = results_rdata$m120$results$method, 
-    returns = results_rdata$m120$results$mu, 
-    sd = results_rdata$m120$results$sd_window
-  ) %>% left_join(legend_setting) %>%
-    filter(!method %in% c("cov2Para")),
-  aes(x = sd, y = returns, color = method,shape = method)) +
-  geom_point(size = 4) +
-  scale_color_manual(values = setNames(legend_setting$color, legend_setting$method),
-                     breaks = legend_setting$method,
-                     labels = legend_setting$label) +
-  scale_shape_manual(values = setNames(legend_setting$shape, legend_setting$method),
-                     breaks = legend_setting$method,
-                     labels = legend_setting$label) +
-  labs(color = "Methods", shape = "Methods") +
-  theme(legend.position = "right") +
-  theme_hsg() +
-  xlab("returns standard deviation, annual") +
-  ylab("returns mean, annual") 
+# estimation 1260 days, test 126 days, 01-01-1970 TO 01-12-2019
+  
+data_ggplot <- tibble(
+  method = results_rdata$d1260_126$results$method, 
+  returns = results_rdata$d1260_126$results$mu, 
+  sd = results_rdata$d1260_126$results$sd_overall
+) %>% left_join(legend_setting) %>%
+  filter(!method %in% c("SP0"))
 
-# 92 MONTHS, 01-01-1970 TO 01-12-2019
-ggplot(
-  tibble(
-    method = results_rdata$m92$results$method_order.cov_est_method, 
-    returns = results_rdata$m92$results$all_avg_returns*12, 
-    sd = results_rdata$m92$results$all_avg_sd*sqrt(12)
-  ) %>% left_join(legend_setting) %>%
-    filter(!method %in% c("")),
-  aes(x = sd, y = returns, color = method,shape = method)) +
-  geom_point(size = 4) +
-  scale_color_manual(values = setNames(legend_setting$color, legend_setting$method),
-                     breaks = legend_setting$method,
-                     labels = legend_setting$label) +
-  scale_shape_manual(values = setNames(legend_setting$shape, legend_setting$method),
-                     breaks = legend_setting$method,
-                     labels = legend_setting$label) +
-  labs(color = "Methods", shape = "Methods") +
-  theme(legend.position = "right") +
-  theme_hsg() +
-  xlab("returns standard deviation, annual") +
-  ylab("returns mean, annual")
+nls_labels <- data_ggplot %>% filter(method %in% c("gis","qis","lis"))
 
-# 60 MONTHS, 01-01-1970 TO 01-12-2019
-ggplot(
-  tibble(
-    method = results_rdata$m60$results$method, 
-    returns = results_rdata$m60$results$mu, 
-    sd = results_rdata$m60$results$sd_overall
-  ) %>% left_join(legend_setting) %>%
-    filter(!method %in% c("")),
-  aes(x = sd, y = returns, color = method,shape = method)) +
-  geom_point(size = 4) +
-  scale_color_manual(values = setNames(legend_setting$color, legend_setting$method),
-                     breaks = legend_setting$method,
-                     labels = legend_setting$label) +
-  scale_shape_manual(values = setNames(legend_setting$shape, legend_setting$method),
-                     breaks = legend_setting$method,
-                     labels = legend_setting$label) +
-  labs(color = "Methods", shape = "Methods") +
-  theme(legend.position = "right") +
-  theme_hsg() +
-  xlab("returns standard deviation, annual") +
-  ylab("returns mean, annual")
-
-# 252 Days, 01-01-1970 TO 01-12-2019
-ggplot(
-  tibble(
-    method = results_rdata$d252$results$method, 
-    returns = results_rdata$d252$results$mu, 
-    sd = results_rdata$d252$results$sd_overall
-  ) %>% left_join(legend_setting) %>%
-    filter(!method %in% c("sample")),
+ggplot(data_ggplot,
   aes(x = sd, y = returns, color = method,shape = method)) +
   geom_point(size = 6) +
   scale_color_manual(values = setNames(legend_setting$color, legend_setting$method),
@@ -211,19 +242,35 @@ ggplot(
         axis.title.y = element_text(size=20),
         axis.text.x  = element_text(size=20),
         axis.text.y  = element_text(size=20)) +
+  geom_label_repel(aes(label = label), 
+                   data = nls_labels,
+                   direction = "y",
+                   segment.color = "grey",
+                   color = "darkgreen",
+                   nudge_y = 1,
+                   segment.size=1) +
   theme_hsg() +
-  xlab("returns standard deviation, annual") +
-  ylab("returns mean, annual")
+  xlab("returns standard deviation (%), annual") +
+  ylab("returns mean (%), annual") +
+  scale_x_continuous(breaks = 0:50) +
+  ylim(c(9,20)) +
+  scale_y_continuous(breaks = 0:24) 
 
-# 504 Days, 01-01-1980 TO 01-12-2019
-ggplot(
-  tibble(
-    method = results_rdata$d504$results$method_order.cov_est_method, 
-    returns = results_rdata$d504$results$all_avg_returns, 
-    sd = results_rdata$d504$results$all_avg_sd
-  ) %>% left_join(legend_setting) %>%
-    filter(!method %in% c("")),
-  aes(x = sd, y = returns, color = method,shape = method)) +
+# estimation 2520 days, test 21 days, 01-01-1970 TO 01-12-2019
+data_ggplot <- tibble(
+  method = results_rdata$d2520_21$results$method, 
+  returns = results_rdata$d2520_21$results$mu, 
+  sd = results_rdata$d2520_21$results$sd_window
+) %>% left_join(legend_setting) %>%
+  filter(!method %in% c("SP500"))
+
+nls_labels <- data_ggplot %>% 
+  filter(method %in% 
+           c("gis","qis","lis","covDiag","covMarket",
+             "cov1Para","cov2Para"))
+
+ggplot(data_ggplot,
+       aes(x = sd, y = returns, color = method,shape = method)) +
   geom_point(size = 6) +
   scale_color_manual(values = setNames(legend_setting$color, legend_setting$method),
                      breaks = legend_setting$method,
@@ -238,9 +285,64 @@ ggplot(
         axis.title.y = element_text(size=20),
         axis.text.x  = element_text(size=20),
         axis.text.y  = element_text(size=20)) +
+  geom_label_repel(aes(label = label), 
+                   data = nls_labels,
+                   direction = "y",
+                   segment.color = "grey",
+                   color = "darkgreen",
+                   # vjust = 1,
+                   nudge_y = 1.5) +
   theme_hsg() +
-  xlab("returns standard deviation, annual") +
-  ylab("returns mean, annual")
+  xlab("returns standard deviation (%), annual") +
+  ylab("returns mean (%), annual") +
+  scale_x_continuous(breaks = 0:25) +
+  scale_y_continuous(breaks = 0:24)
+
+# estimation 2520 days, test 126 days, 01-01-1970 TO 01-12-2019
+data_ggplot <- tibble(
+  method = results_data$method, 
+  returns = results_data$mu, 
+  sd = results_data$sd_overall
+) %>% left_join(legend_setting) %>%
+  filter(!method %in% c("factor1"))
+
+nls_labels <- data_ggplot %>% 
+  filter(method %in% 
+           c("gis","qis","lis",
+             "sample","cov1Para","cov2Para","covCor"
+             ))
+
+ggplot(data_ggplot,
+       aes(x = sd, y = returns, color = method,shape = method)) +
+  geom_point(size = 6) +
+  scale_color_manual(values = setNames(legend_setting$color, legend_setting$method),
+                     breaks = legend_setting$method,
+                     labels = legend_setting$label) +
+  scale_shape_manual(values = setNames(legend_setting$shape, legend_setting$method),
+                     breaks = legend_setting$method,
+                     labels = legend_setting$label) +
+  labs(color = "Methods", shape = "Methods") +
+  theme(legend.position = "right",
+        legend.text = element_text(size=16),
+        axis.title.x = element_text(size=20),
+        axis.title.y = element_text(size=20),
+        axis.text.x  = element_text(size=20),
+        axis.text.y  = element_text(size=20)) +
+  geom_label_repel(aes(label = label), 
+                   data = nls_labels,
+                   direction = "y",
+                   segment.color = "grey",
+                   color = "darkgreen",
+                   # vjust = 1,
+                   nudge_y = 1
+                   ) +
+  theme_hsg() +
+  xlab("returns standard deviation (%), annual") +
+  ylab("returns mean (%), annual") +
+  ylim(c(12,21)) +
+  scale_x_continuous(breaks = 0:30) +
+  scale_y_continuous(breaks = 0:30) 
+
 
 # ------------------------------------------------------------------------------
 #                 NORMALIZED NAV EVOLUTION

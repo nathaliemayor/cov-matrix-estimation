@@ -2,8 +2,8 @@ bootstrap_cov_estimates <- function(
     roll,
     n_bootstraps,
     cov_est_method,
-    data = ff100_data$monthly,
-    frequency = "monthly", 
+    data = ff100_data$daily,
+    frequency = "daily", 
     factor_returns
     ) {
   stock_returns <- bootstrapped_portfolios(data, n_bootstraps)
@@ -60,9 +60,18 @@ bootstrap_cov_estimates <- function(
       mean) %>% 
     reduce(append)
   
+  avg_sr <- lapply(1:n_bootstraps, function(x) 
+    results_by_bootstrap[[x]] %>% 
+      map_depth(1,3) %>% 
+      reduce(append) %>% 
+      na.omit %>% 
+      mean) %>% 
+    reduce(append)
+  
   df <- data.frame(method = cov_est_method, 
                    returns=all_avg_returns_bootstrap,
                    sd = all_avg_sd_bootstrap,
+                   sr = avg_sr,
                    sd_overall = all_sd_bootstrap)
   return(df)
 }
