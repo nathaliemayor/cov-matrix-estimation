@@ -246,11 +246,15 @@ files_bootstrap <- list.files(
 bt_results <- lapply(files_bootstrap, function(x){
   get(load(x))
 }) %>% reduce(rbind) %>% 
-  mutate(sr = sr*sqrt(252)) %>% 
-  left_join(legend_setting) %>% 
+  mutate(sr = sr*sqrt(252),
+         sd = sd*sqrt(252),
+         returns = returns * 252) %>% 
+  left_join(legend_setting,.) %>% 
   select(-method) %>% 
   rename(method = label) %>% 
-  select(method, returns, sd, sr) 
+  plyr::arrange(factor(method, legend_setting$label)) %>% 
+  select(method, returns, sd, sr) %>% 
+  filter(!is.na(returns)) 
   
 
 # confidence intervals
@@ -261,8 +265,10 @@ means <- bt_results %>%
   group_by(method) %>%
   dplyr::summarise(mean_sr = mean(sr, na.rm = TRUE),
                    lower_bound = quantile(sr, 0.025, na.rm = TRUE),
-                   upper_bound = quantile(sr, 0.975, na.rm = TRUE))
+                   upper_bound = quantile(sr, 0.975, na.rm = TRUE)) %>% 
+  plyr::arrange(factor(method, legend_setting$label)) 
 
+bt_results$method <- factor(bt_results$method, levels = legend_setting$label)
 # Plot
 ggplot(bt_results, aes(x = sr)) +
   geom_density(alpha = 0.7) +
@@ -283,7 +289,7 @@ ggplot(bt_results, aes(x = sr)) +
             color = "red", vjust = -0.5, hjust = -0.1, size = 3, 
             check_overlap = TRUE) +
   facet_wrap(~method, ncol = 3, scales = 'free') +
-  xlim(c(-2,2))+
+  xlim(c(-1,2))+
   ylim(c(0,2))+
   scale_color_manual(name = "legend", values = c(mean = "red",`95% CI bands` = "blue", zero = "grey")) +
   theme(legend.position = "top")
@@ -298,25 +304,28 @@ sr <- bt_results %>%
                    sd_sr = round(sd(sr),2),
                    CI95 = paste0("[",round(quantile(sr, 0.025, na.rm = TRUE),2),
                                  ";",round(quantile(sr, 0.975, na.rm = TRUE),2),
-                                 "]"))
+                                 "]")) %>% 
+  plyr::arrange(factor(method, legend_setting$label))
 
-ret <- bt_results %>%
+re <- bt_results %>%
   group_by(method) %>%
-  dplyr::summarise(mean_ret = mean(returns, na.rm = TRUE),
-                   sd_ret = sd(returns),
+  dplyr::summarise(mean_ret = round(mean(returns, na.rm = TRUE),2),
+                   sd_ret = round(sd(returns),2),
                    CI95 = paste0("[",round(quantile(returns, 0.025, na.rm = TRUE),2),
                                  ";",round(quantile(returns, 0.975, na.rm = TRUE),2),
-                                 "]"))
+                                 "]")) %>% 
+  plyr::arrange(factor(method, legend_setting$label))
 
 sd <- bt_results %>%
   group_by(method) %>%
-  dplyr::summarise(mean_sd = mean(sd, na.rm = TRUE),
-                   sd_sd = sd(sd),
+  dplyr::summarise(mean_sd = round(mean(sd, na.rm = TRUE),2),
+                   sd_sd = round(sd(sd),2),
                    CI95 = paste0("[",round(quantile(sd, 0.025, na.rm = TRUE),2),
                                  ";",round(quantile(sd, 0.975, na.rm = TRUE),2),
-                                 "]"))
+                                 "]")) %>% 
+  plyr::arrange(factor(method, legend_setting$label))
 
-sr %>%  stargazer::stargazer(summary=F, rownames = F)
+sd %>%  stargazer::stargazer(summary=F, rownames = F)
 
 
 # ##############################################################################

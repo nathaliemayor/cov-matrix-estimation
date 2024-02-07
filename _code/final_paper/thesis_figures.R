@@ -365,3 +365,47 @@ all_weights_120 <- all_weights
 # ##############################################################################
 #                 APPENDIX FIGURES
 # ##############################################################################
+
+z <- zoo(ff100_data$daily[, -1], order.by = ff100_data$daily$Date) # assuming first column is Date and the rest are Asset prices
+
+compute_pairwise_cor_with_percentiles <- function(data) {
+  n <- ncol(data)
+  correlations <- numeric()
+  for(i in 1:(n-1)) {
+    for(j in (i+1):n) {
+      cor_ij <- cor(data[, i], data[, j], use = "complete.obs")
+      if(!is.na(cor_ij)) correlations <- c(correlations, cor_ij)
+    }
+  }
+  
+  avg_cor <- mean(correlations, na.rm = TRUE)
+  p5_cor <- quantile(correlations, probs = 0.05, na.rm = TRUE)
+  p95_cor <- quantile(correlations, probs = 0.95, na.rm = TRUE)
+  
+  # Return as a single-row matrix with named columns
+  return(matrix(c(avg_cor, p5_cor, p95_cor), nrow = 1, dimnames = list(NULL, c("Average", "P5", "P95"))))
+}
+
+# Applying the function with rollapply
+# Assuming 'z' is your zoo object with appropriate data
+rolling_stats_1260 <- rollapply(z, width = 1260, FUN = compute_pairwise_cor_with_percentiles, by.column = FALSE, align = "right")
+
+# The result will be a matrix where each row corresponds to a time point and each column to one of the statistics
+
+
+rolling_stats %>% 
+  fortify.zoo() %>% 
+  ggplot(aes(Index, Average)) +
+  geom_ribbon(aes(ymin = P5, ymax=P95), fill = "darkslategray4", alpha = 0.5) +
+  geom_line(size = 1) +
+  theme_minimal() +
+  ylab("5 years rolling correlations, average, 95th and 5th percentiles") +
+  xlab("Date") +
+  ylim(c(0,1))
+
+
+
+
+
+
+
