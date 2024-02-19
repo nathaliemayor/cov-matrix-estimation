@@ -319,9 +319,8 @@ complete_window_sr <- all_window_sr %>%
   rename(huge_glasso = parallel_sr_window, 
          sample_short_constraint=sr_window_short)
 
-complete_returns
 
-roll_sr <-  results_rdata$d1260_21$returns %>% 
+roll_sr <-  complete_returns %>% 
   pivot_longer(!date) %>% 
   left_join(TNX$TNX.Adjusted %>% fortify.zoo %>% rename(date=Index)) %>% 
   mutate(year = year(date)) %>%
