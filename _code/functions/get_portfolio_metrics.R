@@ -58,9 +58,7 @@ get_portfolio_metrics <- function (
     mean(na.rm = T)/freq
   # covariance estimation
   
-  rf_sr <- 0.025
-  
-  if (!cov_est_method == "equal_weights") {
+  if (!cov_est_method %in% c("equal_weights", "SP500")) {
     sigma_hat = get_covariance_estimate(
       method = cov_est_method,
       data = training_data,
@@ -70,8 +68,18 @@ get_portfolio_metrics <- function (
   # compute optimal portfolio weights
   if (cov_est_method == "equal_weights") {
     optimal_weights <- equal_weights(training_data)
-  } else {
-    inverse_sigma_hat = solve(sigma_hat)
+  } else if(cov_est_method == "SP500"){
+    sp <- GSPC$GSPC.Adjusted %>% fortify.zoo() %>% 
+      filter(Index >= first(date_test) &
+               Index <= last(date_test)) %>% 
+      mutate(returns = (diff(GSPC.Adjusted)/lag(GSPC.Adjusted))*100)  %>% 
+      suppressWarnings()
+  }else {
+    if(cov_est_method == "huge_glasse"){
+      inverse_sigma_hat = sigma_hat
+    }else{
+      inverse_sigma_hat = solve(sigma_hat)  
+    }
     if (portfolio_optimization == "tangent") {
       # tangent portfolio from Markowitz formula
       excess_er_hat <- colMeans(training_data - rf) 
@@ -100,15 +108,21 @@ get_portfolio_metrics <- function (
         as.numeric(v_ones %*% inverse_sigma_hat %*% v_ones)
     }
   }
-  period_returns <- rowSums(testing_data[,-1]*optimal_weights) %>% 
-    tibble(date=date_test, returns = .) %>% 
-    mutate(returns = returns)
-  ptf_variance <- t(as.matrix(optimal_weights)) %*% 
-    as.matrix(cov(testing_data[,-1])) %*% 
-    as.matrix(optimal_weights)
-  ptf_sd <- sqrt(ptf_variance)
-  
-  SR <- ((mean(period_returns$returns)-rf_sr)/ptf_sd)
-  # results <- period_returns
+  if(cov_est_method == "SP500"){
+    period_returns <- sp$returns
+    ptf_sd <- NULL
+    SR <- NULL
+    optimal_weights <- NULL
+  }else{
+    period_returns <- rowSums(testing_data[,-1]*optimal_weights) %>% 
+      tibble(date=date_test, returns = .) %>% 
+      mutate(returns = returns)
+    ptf_variance <- t(as.matrix(optimal_weights)) %*% 
+      as.matrix(cov(testing_data[,-1])) %*% 
+      as.matrix(optimal_weights)
+    ptf_sd <- sqrt(ptf_variance)
+    ptf_sd <- sd(period_returns$returns)
+    SR <- ((mean(period_returns$returns)-rf_sr)/ptf_sd)
+  }
   results = list(period_returns, ptf_sd, SR, optimal_weights)
 }

@@ -8,7 +8,8 @@
 bootstrapped_portfolios <- function(
     data, 
     n_bootstraps, 
-    block_size=126
+    block_size=126, 
+    TNX = TNX
 ) {
   set.seed(7895)
   

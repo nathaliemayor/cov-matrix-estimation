@@ -61,11 +61,21 @@ bootstrap_cov_estimates <- function(
     reduce(append)
   
   avg_sr <- lapply(1:n_bootstraps, function(x) 
-    results_by_bootstrap[[x]] %>% 
-      map_depth(1,3) %>% 
-      reduce(append) %>% 
-      na.omit %>% 
-      mean) %>% 
+    all <- results_by_bootstrap[[x]] %>% 
+      map_depth(1,1) %>%
+      reduce(rbind) %>% 
+      filter(!is.na(returns)) %>% 
+      left_join(TNX$TNX.Adjusted %>% fortify.zoo %>% rename(date=Index)) %>% 
+      mutate(year = year(date)) %>%
+      group_by(year) %>% 
+      dplyr::summarise(mean_returns = mean(returns),
+                       sd = sd(returns),
+                       rf = mean(TNX.Adjusted, na.rm = T)/252,
+                       sr = mean((mean_returns-rf)/sd)
+                       ) %>% ungroup %>% 
+      dplyr::summarise(sr=mean(sr, na.rm = T))
+  ) %>% 
+    unlist %>% 
     reduce(append)
   
   df <- data.frame(method = cov_est_method, 

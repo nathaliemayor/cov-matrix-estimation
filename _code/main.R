@@ -67,8 +67,8 @@ factors_daily <- rio::import(
 # ------------------------------------------------------------------------------
 #                 DEFINE PARAMETERS, SETTINGS
 # ------------------------------------------------------------------------------
-training_period <- 252 # obs
-rolling_period <- 21*6  # obs
+training_period <- 252*10 # obs
+rolling_period <- 21  # obs
 k <- dim(ff100_data$daily)[1]
 frequency <- "daily" # "monthly"
 
@@ -87,14 +87,16 @@ cov_est_method = c(
   "gis",
   "qis",
   "lis",
-  "CovMve",
-  "CovMcd",
+  # "CovMve",
+  # "CovMcd",
   # "huge_glasso",
   "equal_weights",
   "factor1",
   "factor3",
-  "RMT",
-  "sample"
+  # "RMT",
+  "sample",
+  "ewma"
+  # "SP500"
 )
 
 roll <- seq(1, k - training_period, rolling_period)
@@ -294,39 +296,21 @@ if(frequency == "daily"){
   to_annual <- 12
 }
 
-results_data <- data.frame(
-  method = method_order$cov_est_method, 
-  mu = all_avg_window_returns*to_annual,
-  sd_window = all_avg_window_sd*sqrt(to_annual), 
-  sr_window = all_avg_window_sr*sqrt(to_annual), 
-  sd_overall = all_avg_overall_sd*sqrt(to_annual)
-) %>% add_row(
-    method = "sample_short_constraint", 
-    mu = avg_returns_short*to_annual, 
-    sd_window = sd_avg_window_short*sqrt(to_annual),
-    sr_window = sr_avg_window_short*sqrt(to_annual),
-    sd_overall = sd_avg_overall_short*sqrt(to_annual)
-  ) %>% add_row(
-    method = "huge_glasso", 
-    mu = parallel_returns_avg*to_annual, 
-    sd_window = parallel_sd_window_avg*sqrt(to_annual),
-    sr_window = parallel_sr_window_avg*sqrt(to_annual),
-    sd_overall = parallel_sd_overall*sqrt(to_annual)
-  ) %>% mutate(sr_overall = (mu-6.3)/sd_overall) %>% 
-  add_row(
-    method = "SP500", 
-    mu = stat_sp500$mean, 
-    sd_overall = stat_sp500$sd,
-    sr_overall = stat_sp500$sr
-  )
-
 complete_weights <- all_weights %>% 
   rbind(parallel_weights) %>% 
   rbind(short_restriction_weights)
 
 complete_returns <- all_returns %>% 
   cbind(returns_short[,-1] %>% na.omit) %>% 
-  cbind(parallel_returns[,-1] %>% na.omit)
+  cbind(parallel_returns[,-1] %>% na.omit) %>% 
+  cbind(GSPC$GSPC.Adjusted %>% fortify.zoo() %>% 
+          filter(Index >= (ff100_data$daily$Date[training_period]) &
+                   Index <= (ff100_data$daily$Date[nrow(ff100_data$daily)])) %>% 
+          mutate(returns = (diff(GSPC.Adjusted)/lag(GSPC.Adjusted))*100) %>% 
+          filter(Index %in% all_returns$date) %>% 
+          rename(date = Index,
+                 SP500 = returns) %>% 
+          select(SP500))
 
 complete_window_sd <- all_window_sd %>% 
   cbind(sd_window_short) %>% 
@@ -339,6 +323,50 @@ complete_window_sr <- all_window_sr %>%
   cbind(parallel_sr_window) %>% 
   rename(huge_glasso = parallel_sr_window, 
          sample_short_constraint=sr_window_short)
+
+complete_returns
+
+roll_sr <-  results_rdata$d1260_21$returns %>% 
+  pivot_longer(!date) %>% 
+  left_join(TNX$TNX.Adjusted %>% fortify.zoo %>% rename(date=Index)) %>% 
+  mutate(year = year(date)) %>%
+  filter(date > "1980-01-01") %>% 
+  group_by(year,name) %>% 
+  dplyr::summarise(mean_returns = mean(value),
+                   sd = sd(value),
+                   rf = mean(TNX.Adjusted, na.rm = T)/252,
+                   sr = (mean_returns-rf)/sd) %>% 
+  ungroup %>% 
+  group_by(name) %>% 
+  dplyr::summarise(sr_roll = mean(sr)*sqrt(252),
+                   sd_roll = mean(sd)*sqrt(252),
+                   ret_roll = mean(mean_returns,na.rm = T)*252) %>% 
+  ungroup() %>% rename(method = name)
+
+results_data <- data.frame(
+  method = method_order$cov_est_method, 
+  mu = all_avg_window_returns*to_annual,
+  sd_window = all_avg_window_sd*sqrt(to_annual), 
+  sr_window = all_avg_window_sr*sqrt(to_annual), 
+  sd_overall = all_avg_overall_sd*sqrt(to_annual)
+) %>% add_row(
+  method = "sample_short_constraint", 
+  mu = avg_returns_short*to_annual, 
+  sd_window = sd_avg_window_short*sqrt(to_annual),
+  sr_window = sr_avg_window_short*sqrt(to_annual),
+  sd_overall = sd_avg_overall_short*sqrt(to_annual)
+) %>% add_row(
+  method = "huge_glasso", 
+  mu = parallel_returns_avg*to_annual, 
+  sd_window = parallel_sd_window_avg*sqrt(to_annual),
+  sr_window = parallel_sr_window_avg*sqrt(to_annual),
+  sd_overall = parallel_sd_overall*sqrt(to_annual)
+) %>% 
+  add_row(
+    method = "SP500", 
+    mu = stat_sp500$mean, 
+    sd_overall = stat_sp500$sd
+  ) %>% left_join(roll_sr)
  
 # ------------------------------------------------------------------------------
 #                 BOOTSTRAPPED PORTFOLIO DATA
@@ -445,7 +473,7 @@ bootstrap_covDiag <- foreach(cov_est_method = "covDiag", .combine = rbind) %dopa
                           n_bootstraps = n_bootstraps,
                           data = ff100_data$daily,
                           frequency = frequency,
-                          factor_returns = factors_daily)
+                          factor_returnsv = factors_daily)
 }
 stopImplicitCluster()
 tictoc::toc()
@@ -527,6 +555,22 @@ stopImplicitCluster()
 tictoc::toc()
 save(bootstrap_equal_weights, file = file.path(core_path, data_path, 
                                         "bootstrap_equal_weights_1000.RData"))
+
+registerDoParallel(cores = 4)
+tictoc::tic()
+n_bootstraps <- 1000
+bootstrap_sample <- foreach(cov_est_method = "sample", .combine = rbind) %dopar% {
+  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
+                          roll = roll, 
+                          n_bootstraps = n_bootstraps,
+                          data = ff100_data$daily,
+                          frequency = frequency,
+                          factor_returns = factors_daily)
+}
+stopImplicitCluster()
+tictoc::toc()
+save(bootstrap_sample, file = file.path(core_path, data_path, 
+                                               "bootstrap_sample_1000.RData"))
 
 
 

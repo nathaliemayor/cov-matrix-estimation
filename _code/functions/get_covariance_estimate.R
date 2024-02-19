@@ -50,7 +50,7 @@ get_covariance_estimate <- function(
       out_npn, 
       criterion = "ric"
     )
-    sigma_hat <- select_out$opt.cov
+    sigma_hat <- select_out$opt.icov
   }  else if (method %in% c("factor1", "factor3")) {
     factor_data <- factor_data 
     if(method == "factor1"){
@@ -82,7 +82,9 @@ get_covariance_estimate <- function(
     }
   } else if (method == "RMT") {
     sigma_hat <- covmat::estRMT(data)$cov
-  } else if (method == "sample") {
+  } else if (method == "ewma") {
+    sigma_hat = covEstimation(as.matrix(data), control = list(type="ewma", lambda=0.99734))
+  }else if (method == "sample") {
     sigma_hat <- (t(as.matrix(data)) %*% as.matrix(data)) / (dim(data)[1]-1)
     # sigma_hat <- cov(data, method = "kendall")
   } 

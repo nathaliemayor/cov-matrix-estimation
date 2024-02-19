@@ -26,6 +26,7 @@ library(covmat)
 library(corpcor)
 library(CovTools)       # Oracle
 library(covFactorModel) # factor models
+library(RiskPortfolios)
 # finance specific
 library(tidyquant)
 library(quantmod)
