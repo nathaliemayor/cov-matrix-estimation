@@ -16,7 +16,7 @@ get_portfolio_metrics <- function (
     roll,
     portfolio_optimization,
     short = TRUE, 
-    frequency = "monthly", 
+    frequency = "daily", 
     factor_returns = NULL
 ) {
   if(frequency == "monthly"){
@@ -35,7 +35,6 @@ get_portfolio_metrics <- function (
     (roll):(training_period+roll-1),
     1
   ]
-  rf <- 0.5
   if(cov_est_method %in% c("factor1", "factor3")){
     training_factor_data <- factor_returns[
       (roll):(training_period+roll-1),
@@ -44,13 +43,12 @@ get_portfolio_metrics <- function (
   } else {
     training_factor_data <- NULL
   }
-  
   testing_data <- stock_returns[
     ((training_period+roll)):
       (((training_period+roll+rolling_period))-1),
   ]
   date_test <- testing_data[,1]
-  
+  rf <- 6.5/multiplicator
   rf_sr <- TNX$TNX.Adjusted %>%
     # get average monthly rate, percentage to decimal
     mean(na.rm = T)/freq
