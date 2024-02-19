@@ -53,7 +53,6 @@ colnames(prices) <- colnames(all_returns)[-1]
 prices$date <- all_returns$date
 
 last_points <- prices %>% 
-  mutate(CCM = CCM) %>%
   pivot_longer(!date) %>% 
   rename(method = name) %>% 
   left_join(legend_setting, by = "method") %>% 
@@ -63,7 +62,6 @@ last_points <- prices %>%
   ungroup()
 
 prices %>% 
-  mutate(CCM = CCM) %>%
   pivot_longer(!date) %>% 
   rename(method = name) %>% 
   left_join(legend_setting, by = "method") %>% 
@@ -158,7 +156,7 @@ w_distribution_2520_21 <- results_rdata$d2520_21$weights %>%
     q95 = round(quantile(value*100, probs = 0.95),2)
   )
 
-left_join(legend_setting %>% select(method,label), w_distribution_2520_21) %>% 
+left_join(legend_setting %>% select(method,label), w_distribution_1260_21) %>% 
   select(-method) %>% 
   stargazer::stargazer(summary=F, align=T, rownames=NULL)
 
@@ -328,7 +326,3 @@ sd <- bt_results %>%
 
 re %>%  stargazer::stargazer(summary=F, rownames = F)
 
-
-# ##############################################################################
-#                 APPENDIX TABLES
-# ##############################################################################

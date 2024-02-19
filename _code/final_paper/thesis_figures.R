@@ -119,10 +119,7 @@ data_ggplot <- tibble(
   method = results_rdata$d1260_21$results$method, 
   returns = results_rdata$d1260_21$results$mu, 
   sd = results_rdata$d1260_21$results$sd_overall,
-) %>% add_row(method = "RMT", sd = 20.87, returns = 14.53) %>% 
-  add_row(method = "CovMve", sd = 25.65, returns = 13.59) %>% 
-  add_row(method = "CovMcd", sd = 24.72, returns = 13.71) %>% 
-  left_join(legend_setting) 
+) %>% left_join(legend_setting) 
 
 nls_labels <- data_ggplot %>% filter(method %in% c("gis","qis","lis","covDiag",
                                                    "covMarket","equal_weights","huge_glasso"))
@@ -201,10 +198,7 @@ data_ggplot <- tibble(
   method = results_rdata$d2520_21$results$method, 
   returns = results_rdata$d2520_21$results$mu, 
   sd = results_rdata$d2520_21$results$sd_overall
-) %>% add_row(method = "RMT", sd = 20.59, returns = 13.17) %>% 
-  add_row(method = "CovMve", sd = 22.43, returns = 13.69) %>% 
-  add_row(method = "CovMcd", sd = 22.67, returns = 14) %>% 
-  left_join(legend_setting) 
+) %>% left_join(legend_setting) 
 
 nls_labels <- data_ggplot %>% 
   filter(method %in% 
@@ -287,28 +281,10 @@ ggplot(data_ggplot,
 
 
 # ------------------------------------------------------------------------------
-#                 NORMALIZED NAV EVOLUTION
+#         rolling correlations       
 # ------------------------------------------------------------------------------
 
-# ------------------------------------------------------------------------------
-#                 WEIGHT DISTRIBUTION - BOXPLOT
-# ------------------------------------------------------------------------------
-
-all_weights_120 <- all_weights 
-
-# ------------------------------------------------------------------------------
-#                
-# ------------------------------------------------------------------------------
-
-# ------------------------------------------------------------------------------
-#                
-# ------------------------------------------------------------------------------
-
-# ##############################################################################
-#                 APPENDIX FIGURES
-# ##############################################################################
-
-z <- zoo(ff100_data$daily[, -1], order.by = ff100_data$daily$Date) # assuming first column is Date and the rest are Asset prices
+z <- zoo(ff100_data$daily[, -1], order.by = ff100_data$daily$Date) 
 
 compute_pairwise_cor_with_percentiles <- function(data) {
   n <- ncol(data)
@@ -325,15 +301,13 @@ compute_pairwise_cor_with_percentiles <- function(data) {
   p95_cor <- quantile(correlations, probs = 0.95, na.rm = TRUE)
   
   # Return as a single-row matrix with named columns
-  return(matrix(c(avg_cor, p5_cor, p95_cor), nrow = 1, dimnames = list(NULL, c("Average", "P5", "P95"))))
+  return(matrix(c(avg_cor, p5_cor, p95_cor), nrow = 1, 
+                dimnames = list(NULL, c("Average", "P5", "P95"))))
 }
 
-# Applying the function with rollapply
-# Assuming 'z' is your zoo object with appropriate data
-rolling_stats_1260 <- rollapply(z, width = 1260, FUN = compute_pairwise_cor_with_percentiles, by.column = FALSE, align = "right")
-
-# The result will be a matrix where each row corresponds to a time point and each column to one of the statistics
-
+rolling_stats_1260 <- rollapply(z, width = 1260, 
+                                FUN = compute_pairwise_cor_with_percentiles, 
+                                by.column = FALSE, align = "right")
 
 rolling_stats %>% 
   fortify.zoo() %>% 

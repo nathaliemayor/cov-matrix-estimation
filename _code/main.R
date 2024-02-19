@@ -87,13 +87,13 @@ cov_est_method = c(
   "gis",
   "qis",
   "lis",
-  # "CovMve",
-  # "CovMcd",
-  # "huge_glasso",
+  "CovMve",
+  "CovMcd",
+  "huge_glasso",
   "equal_weights",
   "factor1",
   "factor3",
-  # "RMT",
+  "RMT",
   "sample",
   "ewma"
   # "SP500"
@@ -104,11 +104,7 @@ roll <- seq(1, k - training_period, rolling_period)
 #                 HISTORICAL DATA - COMPUTE PORTFOLIOS
 # ------------------------------------------------------------------------------
 iterations <- crossing(cov_est_method, roll) 
-  # mutate(roll = case_when(
-  #   roll == 5209 & cov_est_method == "RMT" ~ 5210,   
-  #   TRUE~roll))
 
-tictoc::tic()
 test_rolling_cov_method <- pmap(
   iterations,
   get_portfolio_metrics, 
@@ -118,7 +114,6 @@ test_rolling_cov_method <- pmap(
   frequency = frequency, 
   factor_returns = factors_daily
 )
-tictoc::toc()
 
 method_order <- crossing(cov_est_method, roll) %>% 
   dplyr::select(cov_est_method) %>% 
@@ -387,196 +382,6 @@ bootstrap_factor1 <- foreach(cov_est_method = "factor1", .combine = rbind) %dopa
 stopImplicitCluster()
 tictoc::toc()
 save(bootstrap_factor1, file = file.path(core_path, data_path, "bootstrap_factor1_1000.RData"))
-
-registerDoParallel(cores = 4)
-tictoc::tic()
-n_bootstraps <- 1000
-cov_est_method <- "factor3"
-bootstrap_factor3 <- foreach(cov_est_method = "factor3", .combine = rbind) %dopar% {
-  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
-                          roll = roll, 
-                          n_bootstraps = n_bootstraps,
-                          data = ff100_data$daily,
-                          frequency = frequency,
-                          factor_returns = factors_daily)
-}
-stopImplicitCluster()
-tictoc::toc()
-save(bootstrap_factor3, file = file.path(core_path, data_path, "bootstrap_factor3_1000.RData"))
-
-registerDoParallel(cores = 4)
-tictoc::tic()
-n_bootstraps <- 1000
-bootstrap_cov1Para <- foreach(cov_est_method = "cov1Para", .combine = rbind) %dopar% {
-  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
-                          roll = roll, 
-                          n_bootstraps = n_bootstraps,
-                          data = ff100_data$daily,
-                          frequency = frequency,
-                          factor_returns = factors_daily)
-}
-stopImplicitCluster()
-tictoc::toc()
-save(bootstrap_cov1Para, file = file.path(core_path, data_path, "bootstrap_cov1Para_1000.RData"))
-
-registerDoParallel(cores = 4)
-tictoc::tic()
-n_bootstraps <- 1000
-bootstrap_cov2Para <- foreach(cov_est_method = "cov2Para", .combine = rbind) %dopar% {
-  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
-                          roll = roll, 
-                          n_bootstraps = n_bootstraps,
-                          data = ff100_data$daily,
-                          frequency = frequency,
-                          factor_returns = factors_daily)
-}
-stopImplicitCluster()
-tictoc::toc()
-save(bootstrap_cov2Para, file = file.path(core_path, data_path, "bootstrap_cov2Para_1000.RData"))
-
-registerDoParallel(cores = 4)
-tictoc::tic()
-n_bootstraps <- 1000
-bootstrap_covCor <- foreach(cov_est_method = "covCor", .combine = rbind) %dopar% {
-  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
-                          roll = roll, 
-                          n_bootstraps = n_bootstraps,
-                          data = ff100_data$daily,
-                          frequency = frequency,
-                          factor_returns = factors_daily)
-}
-stopImplicitCluster()
-tictoc::toc()
-save(bootstrap_covCor, file = file.path(core_path, data_path, "bootstrap_covCor_1000.RData"))
-
-registerDoParallel(cores = 4)
-tictoc::tic()
-n_bootstraps <- 1000
-bootstrap_CCM <- foreach(cov_est_method = "CCM", .combine = rbind) %dopar% {
-  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
-                          roll = roll, 
-                          n_bootstraps = n_bootstraps,
-                          data = ff100_data$daily,
-                          frequency = frequency,
-                          factor_returns = factors_daily)
-}
-stopImplicitCluster()
-tictoc::toc()
-save(bootstrap_CCM, file = file.path(core_path, data_path, "bootstrap_ccm_1000.RData"))
-
-registerDoParallel(cores = 4)
-tictoc::tic()
-n_bootstraps <- 1000
-bootstrap_covDiag <- foreach(cov_est_method = "covDiag", .combine = rbind) %dopar% {
-  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
-                          roll = roll, 
-                          n_bootstraps = n_bootstraps,
-                          data = ff100_data$daily,
-                          frequency = frequency,
-                          factor_returnsv = factors_daily)
-}
-stopImplicitCluster()
-tictoc::toc()
-save(bootstrap_covDiag, file = file.path(core_path, data_path, "bootstrap_covDiag_1000.RData"))
-
-registerDoParallel(cores = 4)
-tictoc::tic()
-n_bootstraps <- 1000
-bootstrap_covMarket <- foreach(cov_est_method = "covMarket", .combine = rbind) %dopar% {
-  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
-                          roll = roll, 
-                          n_bootstraps = n_bootstraps,
-                          data = ff100_data$daily,
-                          frequency = frequency,
-                          factor_returns = factors_daily)
-}
-stopImplicitCluster()
-tictoc::toc()
-save(bootstrap_covMarket, file = file.path(core_path, data_path, "bootstrap_covMarket_1000.RData"))
-
-registerDoParallel(cores = 4)
-tictoc::tic()
-n_bootstraps <- 1000
-bootstrap_gis <- foreach(cov_est_method = "gis", .combine = rbind) %dopar% {
-  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
-                          roll = roll, 
-                          n_bootstraps = n_bootstraps,
-                          data = ff100_data$daily,
-                          frequency = frequency,
-                          factor_returns = factors_daily)
-}
-stopImplicitCluster()
-tictoc::toc()
-save(bootstrap_gis, file = file.path(core_path, data_path, "bootstrap_gis_1000.RData"))
-
-registerDoParallel(cores = 4)
-tictoc::tic()
-n_bootstraps <- 1000
-bootstrap_lis <- foreach(cov_est_method = "lis", .combine = rbind) %dopar% {
-  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
-                          roll = roll, 
-                          n_bootstraps = n_bootstraps,
-                          data = ff100_data$daily,
-                          frequency = frequency,
-                          factor_returns = factors_daily)
-}
-stopImplicitCluster()
-tictoc::toc()
-save(bootstrap_lis, file = file.path(core_path, data_path, "bootstrap_lis_1000.RData"))
-
-
-registerDoParallel(cores = 4)
-tictoc::tic()
-n_bootstraps <- 1000
-bootstrap_qis <- foreach(cov_est_method = "qis", .combine = rbind) %dopar% {
-  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
-                          roll = roll, 
-                          n_bootstraps = n_bootstraps,
-                          data = ff100_data$daily,
-                          frequency = frequency,
-                          factor_returns = factors_daily)
-}
-stopImplicitCluster()
-tictoc::toc()
-save(bootstrap_qis, file = file.path(core_path, data_path, "bootstrap_qis_1000.RData"))
-
-registerDoParallel(cores = 4)
-tictoc::tic()
-n_bootstraps <- 1000
-bootstrap_equal_weights <- foreach(cov_est_method = "equal_weights", .combine = rbind) %dopar% {
-  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
-                          roll = roll, 
-                          n_bootstraps = n_bootstraps,
-                          data = ff100_data$daily,
-                          frequency = frequency,
-                          factor_returns = factors_daily)
-}
-stopImplicitCluster()
-tictoc::toc()
-save(bootstrap_equal_weights, file = file.path(core_path, data_path, 
-                                        "bootstrap_equal_weights_1000.RData"))
-
-registerDoParallel(cores = 4)
-tictoc::tic()
-n_bootstraps <- 1000
-bootstrap_sample <- foreach(cov_est_method = "sample", .combine = rbind) %dopar% {
-  bootstrap_cov_estimates(cov_est_method = cov_est_method, 
-                          roll = roll, 
-                          n_bootstraps = n_bootstraps,
-                          data = ff100_data$daily,
-                          frequency = frequency,
-                          factor_returns = factors_daily)
-}
-stopImplicitCluster()
-tictoc::toc()
-save(bootstrap_sample, file = file.path(core_path, data_path, 
-                                               "bootstrap_sample_1000.RData"))
-
-
-
-
-
-
 
 
 #getting the convex hull of each unique point set
